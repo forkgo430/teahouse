@@ -9,6 +9,8 @@ import {
   importCharacterBook,
   importCharacterCard,
   importAny,
+  importAs,
+  importPreset,
   decodeBase64Utf8,
   readPngCard,
   importPngCard,
@@ -147,6 +149,104 @@ test('认不出来的东西如实说认不出来', () => {
   const r = importAny({ foo: 1 });
   assert.equal(r.kind, KIND.UNKNOWN);
   assert.match(r.warnings[0], /认不出/);
+});
+
+/* ---------------------------------------------------------------- *
+ * 预设：酒馆的 preset（采样参数 + 提示词栈）
+ * ---------------------------------------------------------------- */
+
+/** 酒馆 openai preset 的典型结构 */
+const ST_PRESET = {
+  name: '雨夜叙事预设',
+  prompts: [
+    { name: '主提示', role: 'system', content: '你是一位克制的说书人。', enabled: true },
+    { name: '备用', role: 'system', content: '不该出现', enabled: false },
+    { name: '用户轮', role: 'user', content: '这条不是 system', enabled: true },
+  ],
+  temperature: 0.88,
+  top_p: 0.94,
+  openai_max_tokens: 900,
+  frequency_penalty: 0.15,
+  presence_penalty: 0.25,
+};
+
+test('识别预设（prompts + 采样参数）', () => {
+  assert.equal(detectKind(ST_PRESET), KIND.PRESET);
+});
+
+test('识别只带 system_prompt 的预设', () => {
+  assert.equal(detectKind({ system_prompt: '你是裁判', temperature: 0.5 }), KIND.PRESET);
+});
+
+test('只带 system_prompt 的对象不会被误判成角色卡', () => {
+  // 角色卡的判定优先级更高：真的有 name + description 时仍走角色卡
+  assert.equal(detectKind({ name: '甲', description: '乙', system_prompt: '丙' }), KIND.CHARACTER);
+});
+
+test('importAny 能把预设导进来 —— 不是只认得出来', () => {
+  // 曾经的 bug：detectKind 判得对，importAny 却没有 preset 分支，
+  // 于是「模式（预设）」分区永远导不进来，报的是"认不出这是什么格式"
+  const r = importAny(ST_PRESET);
+  assert.equal(r.kind, KIND.PRESET);
+  assert.equal(r.settings.temperature, 0.88);
+  assert.equal(r.settings.maxTokens, 900);
+  assert.equal(r.name, '雨夜叙事预设');
+});
+
+test('预设只取启用的 system 段拼系统提示词', () => {
+  const r = importAny(ST_PRESET);
+  assert.equal(r.systemPrompt, '你是一位克制的说书人。');
+  assert.match(r.warnings.join(' '), /2 段未启用或非 system/);
+});
+
+test('预设的采样参数字段名宽容映射', () => {
+  const r = importAny({
+    prompts: [{ role: 'system', content: 'x' }],
+    temp: 0.3,
+    topP: 0.7,
+    max_length: 512,
+  });
+  assert.equal(r.kind, KIND.PRESET);
+  assert.equal(r.settings.temperature, 0.3);
+  assert.equal(r.settings.topP, 0.7);
+  assert.equal(r.settings.maxTokens, 512);
+});
+
+test('空预设如实报告，不装作导成功', () => {
+  const r = importAny({ prompts: [] });
+  assert.equal(r.kind, KIND.PRESET);
+  assert.match(r.warnings.join(' '), /既没有采样参数也没有/);
+});
+
+/* ---------------------------------------------------------------- *
+ * importAs：分类语义 —— 三条不同的解析入口，不是一个接口套三个壳
+ * ---------------------------------------------------------------- */
+
+test('importAs 分类相符时正常导入', () => {
+  assert.equal(importAs(ST_WORLDBOOK, KIND.WORLDBOOK, '世界书').kind, KIND.WORLDBOOK);
+  assert.equal(importAs(CARD_V2, KIND.CHARACTER, '角色卡').kind, KIND.CHARACTER);
+  assert.equal(importAs(ST_PRESET, KIND.PRESET, '预设').kind, KIND.PRESET);
+});
+
+test('importAs 分类不符时拒绝并说明该切到哪一类', () => {
+  const r = importAs(ST_WORLDBOOK, KIND.CHARACTER, '角色卡');
+  assert.equal(r.kind, KIND.UNKNOWN);
+  assert.match(r.warnings[0], /当前分类是「角色卡」/);
+  assert.match(r.warnings[0], /这份内容是「世界书」/);
+});
+
+test('importAs 拒绝时绝不偷偷按别的类型导入', () => {
+  // 硬约束：校验不静默通过。分类不符必须是 unknown，不能返回一份"能用"的结果
+  const r = importAs(CARD_V1, KIND.WORLDBOOK, '世界书');
+  assert.equal(r.kind, KIND.UNKNOWN);
+  assert.equal(r.entries, undefined);
+  assert.equal(r.actor, undefined);
+});
+
+test('importAs 对彻底认不出的内容给出可读说明', () => {
+  const r = importAs({ foo: 1 }, KIND.WORLDBOOK, '世界书');
+  assert.equal(r.kind, KIND.UNKNOWN);
+  assert.match(r.warnings[0], /这不是可识别的数据/);
 });
 
 /* ---------------------------------------------------------------- *

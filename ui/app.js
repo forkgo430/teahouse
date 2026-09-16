@@ -25,7 +25,7 @@ import { createDirector } from '../src/director.js';
 import { labelForPath, resolveValue } from '../src/narrator.js';
 import { defaultStack, buildSystemMessage } from '../src/prompts.js';
 import { budgetStatus } from '../src/context.js';
-import { importAny, importPngCard, KIND } from '../src/importers.js';
+import { importAny, importAs, importPngCard, KIND } from '../src/importers.js';
 import { createWorldbook } from '../src/worldbook.js';
 import { DEFAULT_VARIANT_COUNT, MAX_VARIANTS, variantsOf, swipeState, stepVariant, selectVariantEffects } from '../src/swipe.js';
 import { createAtmosphere } from './atmosphere.js';
@@ -194,13 +194,24 @@ function attachSpot(pane) {
   pane.addEventListener('pointerleave', () => { glow.style.opacity = '0'; });
 }
 
-/** 解析导入文件（JSON 或 PNG 角色卡） */
-async function parseImportFile(file) {
+/**
+ * 解析导入文件（JSON 或 PNG 角色卡）。
+ * @param {File} file
+ * @param {{kind: string, label: string}} [expect] 期望分类；给了就按该分类解析，
+ *   不符时返回 unknown + 说明（分区语义靠这个落实，不是靠事后过滤）
+ */
+async function parseImportFile(file, expect) {
   try {
     const isPng = /\.png$/i.test(file.name) || file.type === 'image/png';
-    return isPng
-      ? importPngCard(await file.arrayBuffer())
-      : importAny(JSON.parse(await file.text()));
+    if (!isPng) {
+      const raw = JSON.parse(await file.text());
+      return expect ? importAs(raw, expect.kind, expect.label) : importAny(raw);
+    }
+    // PNG 只可能是角色卡；分类不是角色卡就如实说，不硬塞
+    if (expect && expect.kind !== KIND.CHARACTER) {
+      return { kind: KIND.UNKNOWN, warnings: [`当前分类是「${expect.label}」，但这是一张 PNG 角色卡 —— 切到「角色卡」再导入`] };
+    }
+    return importPngCard(await file.arrayBuffer());
   } catch (e) {
     return { kind: KIND.UNKNOWN, warnings: [`读不了这个文件：${e.message}`] };
   }
@@ -1673,16 +1684,16 @@ function startMain(root, opts = {}) {
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files?.[0];
       if (!file) return;
-      describe(await parseImportFile(file));
+      describe(await parseImportFile(file, importTab));
     });
 
-    enableDrop(preview, async (file) => describe(await parseImportFile(file)));
+    enableDrop(preview, async (file) => describe(await parseImportFile(file, importTab)));
 
     paste.addEventListener('input', () => {
       const text = paste.value.trim();
       if (!text) { describe(null); return; }
       try {
-        describe(importAny(JSON.parse(text)));
+        describe(importAs(JSON.parse(text), importTab.kind, importTab.label));
       } catch (e) {
         describe({ kind: KIND.UNKNOWN, warnings: [`不是合法的 JSON：${e.message}`] });
       }
@@ -1924,10 +1935,11 @@ function openWizard(scene, imports, onDone) {
   const overlay = el('div', 'ne-modal');
   const card = el('div', 'ne-modal-card');
 
+  // 每一步都有自己的分类：不是三个贴着标签的同款输入框，是三条不同的解析入口
   const steps = [
-    { title: '① 导入世界书', hint: 'SillyTavern 世界书 JSON —— 认不出的内容会如实告诉你' },
-    { title: '② 导入角色卡', hint: '角色卡 V1 / V2（JSON 或 PNG），内嵌设定一并读出' },
-    { title: '③ 配置环境', hint: '接入模型；不接也能玩，正文走预写文本' },
+    { title: '① 导入世界书', hint: 'SillyTavern 世界书 JSON —— 认不出的内容会如实告诉你', kind: KIND.WORLDBOOK, label: '世界书' },
+    { title: '② 导入角色卡', hint: '角色卡 V1 / V2（JSON 或 PNG），内嵌设定一并读出', kind: KIND.CHARACTER, label: '角色卡' },
+    { title: '③ 配置环境', hint: '接入模型；不接也能玩，正文走预写文本', kind: null, label: '环境' },
   ];
 
   let step = 0;
@@ -1944,7 +1956,7 @@ function openWizard(scene, imports, onDone) {
 
   const actions = el('div', 'ne-modal-actions');
   const btnBack = el('button', 'ne-btn', '上一步');
-  const btnSkip = el('button', 'ne-btn', steps[2].title === steps[step].title ? '完成' : '跳过');
+  const btnSkip = el('button', 'ne-btn', '跳过这步');
   const btnNext = el('button', 'ne-btn ne-btn-primary', '下一步');
   btnBack.type = btnSkip.type = btnNext.type = 'button';
   btnBack.disabled = true;
@@ -1973,16 +1985,21 @@ function openWizard(scene, imports, onDone) {
     pendingParse = result;
   }
 
+  /** 当前步期望的分类；③ 步不接内容 */
+  function expect() {
+    return steps[step].kind ? { kind: steps[step].kind, label: steps[step].label } : null;
+  }
+
   function fileInput() {
     const row = el('label', 'ne-field');
     row.appendChild(el('span', 'ne-field-label', '选择文件'));
     const input = el('input', 'ne-field-input');
     input.type = 'file';
-    input.accept = '.json,.png,application/json,image/png';
+    input.accept = steps[step].kind === KIND.CHARACTER ? '.json,.png,application/json,image/png' : '.json,application/json';
     input.addEventListener('change', async () => {
       const f = input.files?.[0];
       if (!f) return;
-      applyParse(await parseImportFile(f));
+      applyParse(await parseImportFile(f, expect()));
     });
     row.appendChild(input);
     return row;
@@ -1997,9 +2014,11 @@ function openWizard(scene, imports, onDone) {
       const t = area.value.trim();
       if (!t) { applyParse(null); return; }
       try {
-        applyParse(importAny(JSON.parse(t)));
-      } catch (e) {
-        applyParse({ kind: KIND.UNKNOWN, warnings: [`不是合法 JSON：${e.message}`] });
+        const raw = JSON.parse(t);
+        const e = expect();
+        applyParse(e ? importAs(raw, e.kind, e.label) : importAny(raw));
+      } catch (err) {
+        applyParse({ kind: KIND.UNKNOWN, warnings: [`不是合法 JSON：${err.message}`] });
       }
     });
     row.appendChild(area);
@@ -2030,8 +2049,11 @@ function openWizard(scene, imports, onDone) {
     hintEl.textContent = steps[step].hint;
     dots.querySelectorAll('.book-tab').forEach((d, i) => d.classList.toggle('is-on', i === step));
     btnBack.disabled = step === 0;
-    btnSkip.textContent = step === steps.length - 1 ? '完成' : '跳过这步';
-    btnNext.textContent = step === steps.length - 1 ? '开 茶' : '下一步';
+    const last = step === steps.length - 1;
+    // 最后一步不再挂两个「都能收尾」的按钮 —— 「完成」会把刚填的配置吞掉
+    btnSkip.hidden = last;
+    btnSkip.textContent = '跳过这步';
+    btnNext.textContent = last ? '开 茶' : '下一步';
     btnNext.disabled = false;
 
     if (step === 0) {
@@ -2050,13 +2072,12 @@ function openWizard(scene, imports, onDone) {
   }
 
   function commit() {
-    if (step === 0 && pendingParse?.kind === KIND.WORLDBOOK) {
+    const k = steps[step].kind;
+    if (k === KIND.WORLDBOOK && pendingParse?.kind === KIND.WORLDBOOK) {
       imports.worldbook.push(...pendingParse.entries);
-    }
-    if (step === 1 && pendingParse?.kind === KIND.CHARACTER) {
+    } else if (k === KIND.CHARACTER && pendingParse?.kind === KIND.CHARACTER) {
       imports.characters.push(pendingParse);
-    }
-    if (step === 2) {
+    } else if (step === steps.length - 1) {
       const cfg = {
         endpoint: fields.endpoint?.value.trim() ?? '',
         apiKey: fields.apiKey?.value.trim() ?? '',
@@ -2066,6 +2087,11 @@ function openWizard(scene, imports, onDone) {
     }
   }
 
+  function finish() {
+    overlay.remove();
+    onDone();
+  }
+
   btnNext.addEventListener('click', () => {
     commit();
     if (step < steps.length - 1) {
@@ -2073,18 +2099,18 @@ function openWizard(scene, imports, onDone) {
       renderStep();
       return;
     }
-    overlay.remove();
-    onDone();
+    finish();
   });
 
   btnSkip.addEventListener('click', () => {
+    // 跳过不等于丢弃：这一步已解析到的内容照样落库，③ 步的配置也照样保存
+    commit();
     if (step < steps.length - 1) {
       step += 1;
       renderStep();
       return;
     }
-    overlay.remove();
-    onDone();
+    finish();
   });
 
   btnBack.addEventListener('click', () => {

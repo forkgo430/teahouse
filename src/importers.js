@@ -51,6 +51,12 @@ export function detectKind(raw) {
   if (raw.name !== undefined && (raw.first_mes !== undefined || raw.description !== undefined)) {
     return KIND.CHARACTER;
   }
+
+  // 次级预设判定：放在角色卡之后 —— V1 卡也可能带 system_prompt，
+  // 所以只有「不像卡」的才落到这里。只带 system_prompt 的预设很常见。
+  if (Array.isArray(raw.prompts) || typeof raw.system_prompt === 'string') {
+    return KIND.PRESET;
+  }
   return KIND.UNKNOWN;
 }
 
@@ -304,7 +310,33 @@ export function importAny(raw) {
   const kind = detectKind(raw);
   if (kind === KIND.CHARACTER) return importCharacterCard(raw);
   if (kind === KIND.WORLDBOOK) return importWorldbook(raw);
-  return { kind: KIND.UNKNOWN, warnings: ['认不出这是什么格式：既不像世界书，也不像角色卡'] };
+  // 预设也必须走这里 —— 否则「模式（预设）」分区永远导不进来
+  if (kind === KIND.PRESET) return importPreset(raw);
+  return { kind: KIND.UNKNOWN, warnings: ['认不出这是什么格式：既不像世界书，也不像角色卡，也不像预设'] };
+}
+
+/**
+ * 按指定分类导入。分类不符时返回 unknown + 说明，**不静默改导成别的东西**。
+ * UI 的分区语义靠它落实：三个分区不是三个外壳，是三条不同的解析入口。
+ * @param {object} raw 原始 JSON
+ * @param {'worldbook'|'character'|'preset'} expect 期望分类
+ * @param {string} [expectLabel] 该分类的中文名，用于提示文案
+ */
+export function importAs(raw, expect, expectLabel) {
+  const actual = detectKind(raw);
+  const label = { worldbook: '世界书', character: '角色卡', preset: '预设', unknown: '未知内容' };
+  if (actual !== expect) {
+    const got = label[actual] ?? actual;
+    return {
+      kind: KIND.UNKNOWN,
+      warnings: [
+        actual === KIND.UNKNOWN
+          ? `这不是可识别的数据：既不像${label[expect] ?? expect}，也不像其他已知格式`
+          : `当前分类是「${expectLabel ?? label[expect]}」，但这份内容是「${got}」—— 切到对应分类再导入`,
+      ],
+    };
+  }
+  return importAny(raw);
 }
 
 /* ------------------------------------------------------------------ *

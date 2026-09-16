@@ -129,6 +129,11 @@
     --tint-top: rgba(30, 70, 120, 0.1);
     --tint-bottom: rgba(255, 255, 255, 0.018);
     --halo: 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(19, 45, 83, 0.08);
+
+    /* 叙述气泡与正文色：正文原先写死 #22384f，深色主题下就是深字压深底 */
+    --bubble: color-mix(in srgb, rgb(255 255 255) calc(34% * var(--aqua-frost, 1)), transparent);
+    --bubble-line: rgba(19, 45, 83, 0.12);
+    --prose: #22384f;
   }
 }
 
@@ -296,6 +301,10 @@
   .ne-body.has-left.has-right { grid-template-columns: 272px 1fr 324px; }
 
   .ne-main {
+    /* 显式占中列：抽屉在窄屏下改成 position:fixed 脱离文档流后，
+       自动放置会把 .ne-main 塞进第 1 列（宽 0）——中栏直接塌成一条线，
+       正文一个字符一行。别依赖自动放置。 */
+    grid-column: 2;
     min-width: 0;
     min-height: 0;
     overflow-y: auto;
@@ -360,13 +369,13 @@
     gap: 14px;
     padding: 0 14px;
     border-bottom: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.66);
+    background: var(--shell);
     backdrop-filter: blur(var(--aqua-blur, 18px)) saturate(1.35);
     -webkit-backdrop-filter: blur(var(--aqua-blur, 18px)) saturate(1.35);
   }
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .ne-topbar { background: #eef4fb; }
+    .ne-topbar { background: var(--bg); }
   }
 
   /* 顶栏底边一层流动的光，随极光同步 */
@@ -524,8 +533,8 @@
 
   /* 叙述消息 = 一片淡玻璃（Aqua 气泡配方）：流体在文字后面隐约流动 */
   .ne-msg-narrator {
-    background: color-mix(in srgb, rgb(255 255 255) calc(34% * var(--aqua-frost, 1)), transparent);
-    border: 1px solid rgba(19, 45, 83, 0.12);
+    background: var(--bubble);
+    border: 1px solid var(--bubble-line);
     border-radius: 16px;
     padding: 14px 18px;
     backdrop-filter: blur(var(--aqua-blur, 14px));
@@ -572,12 +581,12 @@
     margin: 0;
     font-size: clamp(14.5px, 0.85vw + 12px, 16px);
     line-height: 2.02;
-    color: #22384f;
+    color: var(--prose);
     text-wrap: pretty;
     text-shadow: var(--halo);
   }
 
-  .ne-msg-narrator .ne-msg-text { color: #22384f; }
+  .ne-msg-narrator .ne-msg-text { color: var(--prose); }
 
   /* 玩家发言：左边一道渐变竖线，和叙述区分开 */
   .ne-msg-player {
@@ -589,7 +598,7 @@
   .ne-msg-player .ne-msg-kind {
     color: var(--gold);
     border-color: var(--line-gold);
-    background: var(--glass), rgba(91, 164, 255, 0.07);
+    background: var(--glass), var(--plate);
   }
 
   .ne-msg-player .ne-msg-text {
@@ -1554,8 +1563,11 @@
    ══════════════════════════════════════════════════════════════ */
 
 @layer responsive {
-  /* 窄屏：抽屉改成覆盖层 */
-  @media (max-width: 1080px) {
+  /* 窄屏：抽屉改成覆盖层。
+     阈值必须与 JS 的抽屉判定（>960）一致 —— 曾经 CSS 写 1080、JS 写 960，
+     于是在窗口宽度**恰好 1080** 时，抽屉被改成覆盖层、中栏塌成 0 宽，
+     而 JS 又认为自己处于宽屏、不去救它。用户的实际窗口就是 1080x720。 */
+  @media (max-width: 960px) {
     .ne-body,
     .ne-body.has-left,
     .ne-body.has-right,
@@ -1973,6 +1985,16 @@
     --tint-top: rgba(0, 0, 0, 0.28);
     --tint-bottom: rgba(143, 180, 255, 0.02);
     --halo: 0 0 1px rgba(0, 0, 0, 0.5);
+
+    --bubble: color-mix(in srgb, rgb(17 24 50) calc(62% * var(--aqua-frost, 1)), transparent);
+    --bubble-line: rgba(143, 180, 255, 0.18);
+    --prose: #dce7ff;
+  }
+
+  /* 流体是固定色板的 WebGL，不跟着变量走 —— 深色主题下用滤镜压暗，
+     否则正文的浅色字会直接糊在亮 teal 上（截图里就是整屏白） */
+  body.mode-rainnight .ne-fluid {
+    filter: brightness(0.26) saturate(1.35) contrast(1.05);
   }
 
   body.mode-rainnight .ne-glow {
@@ -1998,6 +2020,21 @@
     gap: 10px;
     padding: 5px 0;
     font-size: 12.5px;
+  }
+
+  .consent-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px dashed var(--line);
+  }
+
+  .consent-actions .book-tab {
+    font-size: 11px;
+    padding: 3px 9px;
+    min-height: 26px;
   }
 
   .consent-value {

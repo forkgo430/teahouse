@@ -1,0 +1,10 @@
+{
+  "name": "narrative-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "题材无关的数据驱动互动叙事引擎内核（零运行时依赖）",
+  "scripts": {
+    "test": "node --test"
+  }
+}

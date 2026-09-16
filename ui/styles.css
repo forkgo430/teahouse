@@ -111,6 +111,24 @@
     --lift: var(--glass-hi), var(--glass-shadow);
     --lift-lg: var(--glass-hi), 0 22px 60px -30px rgba(30, 70, 130, 0.3);
     --glow-gold: 0 0 0 1px rgba(47, 125, 225, 0.16), 0 8px 28px -12px rgba(47, 125, 225, 0.3);
+
+    /* 页面底色与模态遮罩 —— 主题化，雨夜模式要换成深色，
+       否则启动页会顶着一层白底、把近黑的雨夜卡片衬成"黑框浮在白天里" */
+    --page-bg:
+      radial-gradient(110% 82% at 72% -18%, #dbe8f8 0%, transparent 56%),
+      radial-gradient(90% 72% at 8% 112%, #e8f1fb 0%, transparent 58%),
+      linear-gradient(168deg, #f2f7fd 0%, #f8fafd 52%, #ffffff 100%);
+    --overlay: rgba(222, 236, 250, 0.6);
+
+    /* 浅色"瓷面"三档 + 顶部高光 + 文字描边光晕。
+       深色主题下这三组必须一起转深，否则白瓷面会在暗底上糊成一块灰斑 */
+    --plate: rgba(255, 255, 255, 0.5);
+    --plate-soft: rgba(255, 255, 255, 0.4);
+    --plate-top: rgba(255, 255, 255, 0.78);
+    --sheen: rgba(255, 255, 255, 0.06);
+    --tint-top: rgba(30, 70, 120, 0.1);
+    --tint-bottom: rgba(255, 255, 255, 0.018);
+    --halo: 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(19, 45, 83, 0.08);
   }
 }
 
@@ -131,10 +149,7 @@
   }
 
   body {
-    background:
-      radial-gradient(110% 82% at 72% -18%, #dbe8f8 0%, transparent 56%),
-      radial-gradient(90% 72% at 8% 112%, #e8f1fb 0%, transparent 58%),
-      linear-gradient(168deg, #f2f7fd 0%, #f8fafd 52%, #ffffff 100%);
+    background: var(--page-bg);
     color: var(--ink);
     font-family: var(--sans);
     font-size: 14px;
@@ -559,7 +574,7 @@
     line-height: 2.02;
     color: #22384f;
     text-wrap: pretty;
-    text-shadow: 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(19, 45, 83, 0.08);
+    text-shadow: var(--halo);
   }
 
   .ne-msg-narrator .ne-msg-text { color: #22384f; }
@@ -729,7 +744,7 @@
     padding: 3px;
     border: 1px solid var(--line);
     border-radius: var(--r-pill);
-    background: var(--glass), rgba(255, 255, 255, 0.5);
+    background: var(--glass), var(--plate);
     animation: ne-fade 0.4s var(--ease-out) backwards;
   }
 
@@ -891,7 +906,7 @@
     padding: 12px 14px 13px;
     border: 1px solid var(--glass-border);
     border-radius: var(--r);
-    background: linear-gradient(180deg, rgba(30, 70, 120, 0.10), rgba(255, 255, 255, 0.018)), var(--panel);
+    background: linear-gradient(180deg, var(--tint-top), var(--tint-bottom)), var(--panel);
     box-shadow: var(--lift);
     margin-bottom: 10px;
     overflow: hidden;
@@ -1019,10 +1034,10 @@
     margin: -46px auto 14px;
     border: 1px solid var(--glass-border);
     border-radius: 24px;
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--plate-top);
     backdrop-filter: blur(var(--aqua-blur, 18px)) saturate(1.5);
     -webkit-backdrop-filter: blur(var(--aqua-blur, 18px)) saturate(1.5);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 10px 36px rgba(19, 45, 83, 0.16);
+    box-shadow: var(--glass-hi), 0 10px 36px rgba(19, 45, 83, 0.16);
   }
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -1062,7 +1077,7 @@
     padding: 10px 19px 10px 15px;
     border: 1px solid var(--glass-border);
     border-radius: var(--r-pill);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(47, 125, 225, 0.03)), var(--panel);
+    background: linear-gradient(180deg, var(--plate-top), rgba(47, 125, 225, 0.03)), var(--panel);
     color: var(--ink);
     font-size: 13.5px;
     cursor: pointer;
@@ -1209,7 +1224,7 @@
     letter-spacing: 0.03em;
     color: var(--ink-3);
     text-wrap: pretty;
-    text-shadow: 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(19, 45, 83, 0.08);
+    text-shadow: var(--halo);
   }
 
   /* ── 结局 ─────────────────────────────────────────────── */
@@ -1283,7 +1298,7 @@
     line-height: 1.95;
     color: var(--ink-2);
     text-wrap: pretty;
-    text-shadow: 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(19, 45, 83, 0.08);
+    text-shadow: var(--halo);
   }
 
   .ne-ending-stat {
@@ -1331,7 +1346,7 @@
     line-height: 1.9;
     color: var(--ink-2);
     text-wrap: pretty;
-    text-shadow: 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(19, 45, 83, 0.08);
+    text-shadow: var(--halo);
   }
 
   .ne-modal-warn {
@@ -1344,7 +1359,7 @@
     line-height: 1.8;
     color: var(--ink-3);
     text-wrap: pretty;
-    text-shadow: 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 2px rgba(19, 45, 83, 0.08);
+    text-shadow: var(--halo);
   }
 
   /* 文件选择框：默认控件太丑，只保留原生按钮并改造它 */
@@ -1403,7 +1418,7 @@
     min-height: 48px;
     border: 1px dashed var(--line-2);
     border-radius: var(--r);
-    background: rgba(255, 255, 255, 0.4);
+    background: var(--plate-soft);
   }
 
   .ne-import-preview:empty::before {
@@ -1476,7 +1491,7 @@
     display: grid;
     place-items: center;
     padding: 20px;
-    background: rgba(222, 236, 250, 0.6);
+    background: var(--overlay);
     backdrop-filter: blur(8px) saturate(1.2);
     -webkit-backdrop-filter: blur(8px) saturate(1.2);
     animation: ne-fade 0.24s var(--ease) backwards;
@@ -1608,10 +1623,7 @@
     display: grid;
     grid-template-rows: 1fr auto;
     overflow: hidden;
-    background:
-      radial-gradient(110% 82% at 72% -18%, #dbe8f8 0%, transparent 56%),
-      radial-gradient(90% 72% at 8% 112%, #e8f1fb 0%, transparent 58%),
-      linear-gradient(168deg, #f2f7fd 0%, #f8fafd 52%, #ffffff 100%);
+    background: var(--page-bg);
     transition: opacity 0.55s var(--ease), transform 0.55s var(--ease), filter 0.55s var(--ease);
   }
 
@@ -1831,7 +1843,7 @@
     position: relative;
     border: 1px solid var(--glass-border);
     border-radius: var(--r);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(47, 125, 225, 0.03)), var(--panel);
+    background: linear-gradient(180deg, var(--plate-top), rgba(47, 125, 225, 0.03)), var(--panel);
     box-shadow: var(--lift);
     margin-bottom: 14px;
     overflow: hidden;
@@ -1910,9 +1922,10 @@
   /* ── 雨夜模式 ───────────────────────────────────────── */
 
   body.mode-rainnight {
+    color-scheme: dark;
     --bg: #0a0d1c;
     --bg-deep: #05070f;
-    --shell: #0b1020;
+    --shell: rgba(15, 21, 43, 0.86);
     --panel: rgba(15, 20, 42, 0.7);
     --panel-2: #151b34;
     --panel-3: #1d2547;
@@ -1925,6 +1938,41 @@
     --gold-lo: var(--accent-lo);
     --gold-dim: var(--accent-dim);
     --line-gold: rgba(143, 180, 255, 0.4);
+
+    /* 文字：不换这三档，深底上就是深字，读不出来 */
+    --ink: #e8eeff;
+    --ink-2: #aab9da;
+    --ink-3: #7286ad;
+
+    /* 描边与投影同步转深 */
+    --line: rgba(143, 180, 255, 0.12);
+    --line-2: rgba(143, 180, 255, 0.2);
+    --lift-sm: 0 2px 8px -2px rgba(0, 0, 0, 0.5);
+    --lift-lg: var(--glass-hi), 0 22px 60px -30px rgba(0, 0, 0, 0.75);
+    --glow-gold: 0 0 0 1px rgba(143, 180, 255, 0.2), 0 8px 28px -12px rgba(143, 180, 255, 0.28);
+
+    /* 玻璃：白玻璃配方在深底上会读成一坨灰，换成同一公式的深色版 */
+    --glass: color-mix(in srgb, rgb(24 32 62) calc(72% * var(--aqua-frost, 1)), transparent);
+    --glass-strong: color-mix(in srgb, rgb(30 40 76) calc(84% * var(--aqua-frost, 1)), transparent);
+    --glass-hi: inset 0 1px 0 rgba(180, 205, 255, 0.12);
+    --glass-border: rgba(143, 180, 255, 0.24);
+    --glass-shadow: 0 24px 70px -20px rgba(0, 0, 0, 0.7);
+
+    /* 页面底色与遮罩：启动页、向导、模态三处共用 */
+    --page-bg:
+      radial-gradient(110% 82% at 72% -18%, #141c38 0%, transparent 56%),
+      radial-gradient(90% 72% at 8% 112%, #101832 0%, transparent 58%),
+      linear-gradient(168deg, #0a0d1c 0%, #070a16 52%, #05070f 100%);
+    --overlay: rgba(6, 9, 20, 0.66);
+
+    /* 瓷面三档同步转深：不是白玻璃调暗，是同一公式换底色 */
+    --plate: rgba(143, 180, 255, 0.1);
+    --plate-soft: rgba(143, 180, 255, 0.07);
+    --plate-top: rgba(143, 180, 255, 0.16);
+    --sheen: rgba(143, 180, 255, 0.1);
+    --tint-top: rgba(0, 0, 0, 0.28);
+    --tint-bottom: rgba(143, 180, 255, 0.02);
+    --halo: 0 0 1px rgba(0, 0, 0, 0.5);
   }
 
   body.mode-rainnight .ne-glow {
@@ -2135,8 +2183,8 @@
 
 .ne-clockbox {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 55%),
-    var(--glass), rgba(255, 255, 255, 0.5);
+    linear-gradient(180deg, var(--sheen), transparent 55%),
+    var(--glass), var(--plate);
 }
 
 .ne-clockbox-day {

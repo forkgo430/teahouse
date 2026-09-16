@@ -249,7 +249,9 @@ test('trackAttemptEffects 记录方向且保留上次拒绝时间', () => {
   const refused = applyEffects(s, refuseEffects(s, 'a').effects).state;
   const tracked = applyEffects(refused, trackAttemptEffects(refused, 'a', '靠近')).state;
   assert.equal(tracked.tracks.a.direction, '靠近');
-  assert.equal(tracked.tracks.a.lastRefusedTurn, 0, '不该抹掉拒绝记录');
+  // 断言的是不变量（拒绝记录没被抹掉），不是某个写死的轮号 ——
+  // 「当轮」的定义改过一次，写死 0 的断言会跟着一起错
+  assert.equal(tracked.tracks.a.lastRefusedTurn, currentTurn(s), '不该抹掉拒绝记录');
 });
 
 /* ---------------------------------------------------------------- *

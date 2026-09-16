@@ -66,6 +66,9 @@ export function createWorld(def = {}) {
     endings: def.endings ?? [],
     guards: def.guards ?? [],
     slotLabels: { ...DEFAULT_SLOT_LABELS, ...(def.slotLabels ?? {}) },
+    // 开场白属于内容层，必须由世界定义提供 —— UI 里写死过一句旧公寓的开场，
+    // 于是雨夜模式也开着别人的场
+    opening: def.opening ?? '',
     brief: def.brief ?? '',
     placeLabels: def.placeLabels ?? null,
     actorLabels: def.actorLabels ?? null,
@@ -251,28 +254,52 @@ export function selectBranch(state, event, input) {
  *
  * reason 是给玩家看的一句话，不含字段路径；reasonDetail 留完整轨迹给调试。
  */
-export function buildOptions(state, event) {
+/**
+ * 单个分支能不能过闸。buildOptions 与 applyTurn 共用一个判据 ——
+ * 否则会出现「选项看着能点、点了就抛」的坑（边界 guard 就是这么漏的）。
+ * @returns {{ ok: boolean, reason?: string, code?: string }}
+ */
+export function evaluateGuards(state, event, branch, world) {
+  for (const guard of world?.guards ?? []) {
+    const r = guard({ state, event, branch, effects: branch.effects ?? [] });
+    if (r && r.ok === false) return { ok: false, reason: r.reason ?? '越界推进被拒绝', code: r.code };
+  }
+  return { ok: true };
+}
+
+/**
+ * 列出这一轮的可选项。
+ * @param {object} state
+ * @param {object} event
+ * @param {object} [world] 给了就把 guard 也算进去（缺省只算 cond，向后兼容）
+ */
+export function buildOptions(state, event, world) {
   if (!event) return [];
 
   const opts = [];
   for (const b of event.branches ?? []) {
     const ok = evaluate(b.cond ?? null, state);
     const failed = ok ? null : firstFailure(b.cond, state);
+    // guard 不过的分支不算可用 —— 摆出来却点不动，比不给更糟
+    const gate = ok && world ? evaluateGuards(state, event, b, world) : { ok: true };
     opts.push({
       key: b.key,
       label: b.label ?? b.key,
       kind: (b.cond ?? null) === null ? 'default' : 'branch',
-      available: ok,
-      reason: failed ? failed.text : null,
-      reasonDetail: failed ? failed.detail : null,
+      available: ok && gate.ok,
+      reason: failed ? failed.text : (gate.ok ? null : gate.reason),
+      reasonDetail: failed ? failed.detail : (gate.ok ? null : { code: gate.code, gate: 'guard' }),
     });
   }
 
-  // 保底推进：若一个分支都不可用，强制打开保底项
+  // 保底推进：若一个分支都不可用，强制打开保底项。
+  // 但**不给被 guard 挡住的分支开后门** —— 边界不是"条件不满足"，不能靠保底绕过。
   if (!opts.some(o => o.available)) {
     const fallbackKey = event.fallback ?? (event.branches ?? [])[0]?.key;
     const hit = opts.find(o => o.key === fallbackKey);
-    if (hit) {
+    const blockedByGate = hit && !hit.available
+      && (hit.reasonDetail?.gate === 'guard');
+    if (hit && !blockedByGate) {
       hit.available = true;
       hit.kind = 'fallback';
       hit.reason = null;
@@ -318,11 +345,9 @@ function firstFailure(cond, state) {
  * ------------------------------------------------------------------ */
 
 function runGuards(state, event, branch, world) {
-  for (const guard of world.guards ?? []) {
-    const r = guard({ state, event, branch, effects: branch.effects ?? [] });
-    if (r && r.ok === false) {
-      throw new TurnRejected(r.reason ?? '越界推进被拒绝', { eventId: event.id, branchKey: branch.key });
-    }
+  const gate = evaluateGuards(state, event, branch, world);
+  if (!gate.ok) {
+    throw new TurnRejected(gate.reason, { eventId: event.id, branchKey: branch.key, code: gate.code });
   }
 }
 
@@ -411,14 +436,14 @@ function recordHistory(state, event, branch, changes, intent) {
  *
  * @returns {{ kind:'key'|'auto'|'unknown'|'unavailable', branchKey?:string, matched?:string[], reason?:string, suggestions?:string[], raw?:string }}
  */
-export function interpretInput(state, event, raw) {
+export function interpretInput(state, event, raw, world) {
   const branches = event?.branches ?? [];
 
   // 对象形式（给程序调用留的口子）
   if (raw !== null && typeof raw === 'object') {
     if (raw.auto === true) return { kind: 'auto' };
     if (raw.branchKey != null) return { kind: 'key', branchKey: String(raw.branchKey) };
-    if (raw.text != null) return interpretInput(state, event, String(raw.text));
+    if (raw.text != null) return interpretInput(state, event, String(raw.text), world);
     return { kind: 'auto' };
   }
 
@@ -437,7 +462,7 @@ export function interpretInput(state, event, raw) {
     if (branches.some(b => b.key === upper)) return { kind: 'key', branchKey: upper };
 
     if (/^\d+$/.test(text)) {
-      const opts = buildOptions(state, event);
+      const opts = buildOptions(state, event, world);
       const idx = Number(text) - 1;
       if (opts[idx]) {
         return opts[idx].available
@@ -458,7 +483,7 @@ export function interpretInput(state, event, raw) {
     return { kind: 'key', branchKey: parsed.branchKey, matched: parsed.matched, raw: text };
   }
 
-  const availableKeys = buildOptions(state, event).filter(o => o.available).map(o => o.key);
+  const availableKeys = buildOptions(state, event, world).filter(o => o.available).map(o => o.key);
   return {
     kind: 'unknown',
     raw: text,
@@ -472,7 +497,7 @@ export function interpretInput(state, event, raw) {
  * @returns {{ state: object, report: object }}
  */
 export function applyTurn(state, event, input, world) {
-  const intent = interpretInput(state, event, input);
+  const intent = interpretInput(state, event, input, world);
 
   if (intent.kind === 'unknown') {
     throw new TurnRejected(
@@ -553,7 +578,7 @@ export function nextTurn(state, world) {
   for (let i = 0; i <= world.maxSkips; i++) {
     const event = pickEvent(cur, world);
     if (event) {
-      return { state: cur, event, options: buildOptions(cur, event), skips };
+      return { state: cur, event, options: buildOptions(cur, event, world), skips };
     }
     skips.push({ day: cur.clock.day, slot: cur.clock.slot });
     cur = advanceClock(cur);
@@ -612,6 +637,15 @@ export function buildView(state, world, extra = {}) {
       })),
     })),
     ledger: { ...(state.ledger ?? {}) },
+    // 当轮意愿与边界：只给 UI 看，判定仍然只在 boundary.js 里做
+    consent: Object.fromEntries(
+      Object.entries(state.actors ?? {}).map(([id]) => [id, {
+        state: state.consent?.[id]?.state ?? null,
+        terms: state.consent?.[id]?.terms ?? null,
+        turn: state.consent?.[id]?.turn ?? null,
+        route: state.routes?.[id] ?? 'closed',
+      }]),
+    ),
     clues: [...(state.clues ?? [])],
     achievements: [...(state.achievements ?? [])],
     endings: [...(state.endings ?? [])],

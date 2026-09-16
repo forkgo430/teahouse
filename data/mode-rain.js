@@ -25,6 +25,11 @@ export const RAINNIGHT_MODE = {
   },
 
   world: {
+    opening:
+      '雨从傍晚下到现在，没停过。\n'
+      + '你在自己的住处，本来已经准备睡了 —— 门被敲响了。\n'
+      + '敲得很轻，轻到你怀疑是不是听错了；隔了几秒，又敲了三下。',
+
     brief:
       '（雨夜模式 · 世界观骨架，待按文档填充）\n' +
       '现代都市的雨夜。有人带着一桩难以开口的事来求助，' +
@@ -34,6 +39,29 @@ export const RAINNIGHT_MODE = {
       room: '住处',
       door: '门外',
       street: '雨夜街头',
+      school: '学校门口',
+      lending: '借贷公司',
+      hospital: '医院',
+    },
+
+    /* 人物与数值的中文标签：UI 一律走 world.statLabels / actorLabels 取，
+       取不到才会露出内部 key（trust / pressure 这种） */
+    actorLabels: {
+      seeker: '求助者',
+      self: '你',
+    },
+
+    statLabels: {
+      seeker: {
+        trust: '信任',
+        safety: '安全感',
+        anxiety: '未来焦虑',
+      },
+      self: {
+        pressure: '压力',
+        weary: '疲惫',
+        dignity: '自尊',
+      },
     },
 
     clueLabels: {
@@ -313,6 +341,83 @@ export const RAINNIGHT_MODE = {
           },
         ],
       },
+      {
+        /* 边界演示第一步：把线划出来。划完只开路线，表态由玩家在
+           「当轮意愿与边界」卡上登记 —— 事件分支写不了表态（轮号对不上）。 */
+        id: 'R07',
+        title: '把能说的和不能说的说清楚',
+        when: { day: 3, slot: 'morning' },
+        priority: 80,
+        actors: ['seeker'],
+        require: { path: 'flags.took_case', op: '==', value: true },
+        fallback: 'B',
+        branches: [
+          {
+            key: 'A',
+            label: '当场把界限谈明白',
+            keywords: ['界限', '说清楚', '谈明白', '能问什么'],
+            cond: null,
+            text: '你没有绕。哪些事能问、哪些事不归你管、帮到哪一步为止 —— 一条一条摆出来。'
+              + '她也说了她的。说完，这条线就算是两个人一起划的。',
+            effects: [
+              { path: 'routes.seeker', op: 'set', value: 'open' },
+              { path: 'flags.boundary_agreed', op: 'set', value: true },
+              { path: 'actors.seeker.stats.safety', op: 'add', value: 12 },
+              { path: 'actors.seeker.stats.trust', op: 'add', value: 8 },
+            ],
+          },
+          {
+            key: 'B',
+            label: '先不谈这个',
+            keywords: ['不谈', '以后再说', '先不提'],
+            cond: null,
+            text: '你没有把话摊开。有些事留在没说的地方，也就没人知道它到底算不算数。',
+            effects: [
+              { path: 'actors.seeker.stats.anxiety', op: 'add', value: 6 },
+              { path: 'flags.boundary_deferred', op: 'set', value: true },
+            ],
+          },
+        ],
+      },
+      {
+        /* 边界演示第二步：真的过一次闸。
+           A 分支声明 requiresConsent，意愿不足时**选项就是灰的**（不再是点了才抛）；
+           B 分支永远合法，所以卡住也不会卡死流程。 */
+        id: 'R08',
+        title: '按说好的来',
+        when: { day: 3, slot: 'evening' },
+        priority: 85,
+        actors: ['seeker'],
+        require: { path: 'flags.boundary_agreed', op: '==', value: true },
+        fallback: 'B',
+        branches: [
+          {
+            key: 'A',
+            label: '照她答应的那一步走',
+            keywords: ['按说好的', '照说好的', '进一步'],
+            cond: null,
+            requiresConsent: 'seeker',
+            text: '你按她答应的那一步往下走 —— 不抢在前面，也不落在后面。'
+              + '她这次没有躲，于是这件事往前挪了一格。',
+            effects: [
+              { path: 'routes.seeker', op: 'set', value: 'advancing' },
+              { path: 'actors.seeker.stats.trust', op: 'add', value: 10 },
+              { path: 'flags.advanced_once', op: 'set', value: true },
+            ],
+          },
+          {
+            key: 'B',
+            label: '就停在这儿',
+            keywords: ['停', '不急', '就这样'],
+            cond: null,
+            text: '你在她答应的那一步之前就停了。停不是退，只是今天不走。',
+            effects: [
+              { path: 'actors.seeker.stats.safety', op: 'add', value: 8 },
+              { path: 'flags.held_back', op: 'set', value: true },
+            ],
+          },
+        ],
+      },
     ],
   },
 
@@ -329,9 +434,12 @@ export function createRainWorld(createWorldFn) {
     events: w.events,
     achievements: w.achievements,
     endings: w.endings,
+    opening: w.opening,
     brief: w.brief,
     placeLabels: w.placeLabels,
     clueLabels: w.clueLabels,
+    actorLabels: w.actorLabels,
+    statLabels: w.statLabels,
     worldbook: w.worldbook,
     guards: RAINNIGHT_MODE.guards(),
     loreBudget: 900,

@@ -16,6 +16,7 @@
 
 import { createDemoWorld, createDemoState, CLUES, PLACES } from '../data/demo.js';
 import { createInitialState } from '../src/schema.js';
+import { createWorld } from '../src/engine.js';
 import { RAINNIGHT_MODE, createRainWorld, rainInitialState } from '../data/mode-rain.js';
 import { nextTurn, applyTurn, buildView, TurnRejected } from '../src/engine.js';
 import { createStore, applyEffects, hashState } from '../src/state.js';
@@ -27,6 +28,7 @@ import { defaultStack, buildSystemMessage } from '../src/prompts.js';
 import { budgetStatus } from '../src/context.js';
 import { importAny, importAs, importPngCard, KIND } from '../src/importers.js';
 import { createWorldbook } from '../src/worldbook.js';
+import { canAdvance, CONSENT, consentEffects, withdrawEffects, renegotiateEffects } from '../src/boundary.js';
 import { DEFAULT_VARIANT_COUNT, MAX_VARIANTS, variantsOf, swipeState, stepVariant, selectVariantEffects } from '../src/swipe.js';
 import { createAtmosphere } from './atmosphere.js';
 import { attachFluidShader, TEA_FLUID_PARAMS } from './fluid.js';
@@ -303,6 +305,9 @@ export function mount(root) {
 
 function startMain(root, opts = {}) {
   const mode = opts.mode ?? readMode();
+  // 主题类在这里再兜一次底：启动页只在 renderBoot 里加过一次，
+  // 从向导进来、或启动后才切模式时，类就漏了 —— 结果雨夜模式顶着浅色主题跑。
+  document.body.classList.toggle('mode-rainnight', mode === 'rainnight');
   const world = createWorldFor(mode);
   const store = createStore(initialStateFor(mode));
   const SAVE_KEY = saveKeyFor(mode);
@@ -644,8 +649,7 @@ function startMain(root, opts = {}) {
       const head = el('div', 'ne-msg-head');
       head.appendChild(el('span', 'ne-msg-kind', '开场'));
       intro.appendChild(head);
-      intro.appendChild(el('p', 'ne-msg-text',
-        '你刚搬进这栋旧楼的第一夜。行李还没拆完，窗外的雨一直没停，门外传来脚步声。'));
+      intro.appendChild(el('p', 'ne-msg-text', world.opening));
       stream.appendChild(intro);
       return;
     }
@@ -680,7 +684,7 @@ function startMain(root, opts = {}) {
 
     for (const s of actor.stats) {
       const row = el('div', 'ne-stat');
-      row.appendChild(el('span', 'ne-stat-key', s.key));
+      row.appendChild(el('span', 'ne-stat-key', statLabel(actor.id, s.key)));
 
       const bar = el('div', 'ne-bar');
       const fill = el('i');
@@ -695,6 +699,120 @@ function startMain(root, opts = {}) {
     return box;
   }
 
+  /* 标签一律先问 world（模式可以给自己的一套），问不到再退到示例数据的表。
+     原先这里直接读 demo 的 PLACES / CLUES，于是雨夜模式的地点、线索
+     全都显示成旧公寓那一套 —— mode-rain 里写的标签从来没被读过。 */
+  function placeLabel(id) {
+    if (id === null || id === undefined) return '未知';
+    return world.placeLabels?.[id] ?? PLACES[id] ?? id;
+  }
+
+  function clueLabel(id) {
+    return world.clueLabels?.[id] ?? CLUES[id] ?? id;
+  }
+
+  function statLabel(actorId, key) {
+    return world.statLabels?.[actorId]?.[key] ?? key;
+  }
+
+  /** 意愿 → 样式修饰 + 文案 */
+  const CONSENT_TONE = {
+    [CONSENT.ACCEPT]: 'is-accept',
+    [CONSENT.REFUSE]: 'is-refuse',
+    [CONSENT.WITHDRAW]: 'is-withdraw',
+    [CONSENT.RENEGOTIATE]: 'is-renegotiate',
+  };
+
+  const ROUTE_TEXT = {
+    closed: '未开启',
+    open: '已开启',
+    advancing: '推进中',
+    frozen: '已冻结（需重新协商）',
+    settled: '已定局',
+  };
+
+  const CONSENT_ORDER = [
+    CONSENT.UNSPOKEN, CONSENT.ACCEPT, CONSENT.REFUSE, CONSENT.WITHDRAW, CONSENT.RENEGOTIATE,
+  ];
+
+  /**
+   * 登记一次当轮表态。
+   *
+   * 为什么必须是手动的：effects 在 recordHistory 之前执行，所以由事件分支
+   * 写下的表态，轮号注定与"下一轮守卫看到的轮号"对不上 —— 表态永远等于作废。
+   * 表态必须发生在**两轮之间**（这一轮已记完、下一轮还没开），
+   * 这正是「当轮意愿必须在公开处登记」的落点。
+   *
+   * 判定仍然只在 boundary.js 里做，这里只负责把结果写进状态。
+   */
+  function registerConsent(actorId, value) {
+    const cur = store.getState();
+    const effects = value === CONSENT.WITHDRAW
+      ? withdrawEffects(cur, actorId)
+      : value === CONSENT.RENEGOTIATE
+        ? renegotiateEffects(cur, actorId)
+        : consentEffects(cur, actorId, value);
+    store.dispatch(effects);
+    audio.pick();
+    render();
+    appendSystem(
+      value === CONSENT.UNSPOKEN
+        ? `已把「${world.actorLabels?.[actorId] ?? actorId}」的当轮意愿记为未公开表达`
+        : `已登记「${world.actorLabels?.[actorId] ?? actorId}」的当轮意愿：${value}（只在下一轮有效，过后需重新确认）`,
+      'good',
+    );
+  }
+
+  /**
+   * 当轮意愿与边界卡（雨夜专属）。
+   * 能不能推进一律问 boundary.canAdvance，把结论照搬上来 ——
+   * UI 不许自己长出一套"同不同意"的标准。
+   */
+  function consentSection(view) {
+    const sec = el('section', 'ne-sec');
+    sec.appendChild(el('h3', 'ne-sec-title', '当轮意愿与边界'));
+
+    for (const a of view.actors) {
+      const c = view.consent?.[a.id] ?? {};
+      const card = el('div', 'consent-card');
+
+      const rowName = el('div', 'consent-row');
+      rowName.appendChild(el('span', null, a.name));
+      const value = c.state ?? CONSENT.UNSPOKEN;
+      rowName.appendChild(el('span',
+        `consent-value${CONSENT_TONE[value] ? ` ${CONSENT_TONE[value]}` : ''}`, value));
+      card.appendChild(rowName);
+
+      const rowRoute = el('div', 'consent-row');
+      rowRoute.appendChild(el('span', null, '关系路线'));
+      rowRoute.appendChild(el('span', 'consent-value', ROUTE_TEXT[c.route] ?? c.route ?? '未开启'));
+      card.appendChild(rowRoute);
+
+      // 判定权在引擎；这里只把闸门给的原话转述出来
+      const gate = canAdvance(store.getState(), a.id);
+      const rowGate = el('div', 'consent-row');
+      rowGate.appendChild(el('span', null, '能否推进'));
+      rowGate.appendChild(el('span', `consent-value${gate.ok ? ' is-accept' : ''}`,
+        gate.ok ? '可以' : gate.reason));
+      card.appendChild(rowGate);
+
+      const actions = el('div', 'consent-actions');
+      for (const v of CONSENT_ORDER) {
+        const b = el('button', `book-tab${value === v ? ' is-on' : ''}`, v);
+        b.type = 'button';
+        b.addEventListener('click', () => registerConsent(a.id, v));
+        actions.appendChild(b);
+      }
+      card.appendChild(actions);
+
+      sec.appendChild(card);
+    }
+
+    sec.appendChild(el('p', 'ne-modal-note',
+      '同意只在当轮有效 —— 上一轮说过「接受」，这一轮要重新确认。经济帮助、住宿、债务援助都不构成同意。'));
+    return sec;
+  }
+
   function renderSidebar(view) {
     drawerLeft.innerHTML = '';
 
@@ -702,7 +820,7 @@ function startMain(root, opts = {}) {
     s1.appendChild(el('h3', 'ne-sec-title', '当前局面'));
     const clock = el('div', 'ne-clockbox');
     clock.appendChild(el('div', 'ne-clockbox-day', `第 ${view.clock.day} 天 · ${view.clock.label}`));
-    clock.appendChild(el('div', 'ne-clockbox-where', PLACES[view.where] ?? view.where ?? '未知'));
+    clock.appendChild(el('div', 'ne-clockbox-where', placeLabel(view.where)));
     s1.appendChild(clock);
     drawerLeft.appendChild(s1);
 
@@ -711,11 +829,14 @@ function startMain(root, opts = {}) {
     view.actors.forEach((a, i) => s2.appendChild(actorCard(a, i)));
     drawerLeft.appendChild(s2);
 
+    // 雨夜专属：当轮意愿与边界。样式一直在，渲染一直没写 —— 现在补上。
+    if (mode === 'rainnight') drawerLeft.appendChild(consentSection(view));
+
     const s3 = el('section', 'ne-sec');
     s3.appendChild(el('h3', 'ne-sec-title', `线索 · ${view.clues.length}`));
     if (view.clues.length) {
       const chips = el('div', 'ne-chips');
-      view.clues.forEach(id => chips.appendChild(el('span', 'ne-chip blue', CLUES[id] ?? id)));
+      view.clues.forEach(id => chips.appendChild(el('span', 'ne-chip blue', clueLabel(id))));
       s3.appendChild(chips);
     } else {
       s3.appendChild(el('div', 'ne-empty', '还没有拿到任何线索'));

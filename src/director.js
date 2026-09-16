@@ -111,7 +111,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
      * @returns {{ ok:boolean, branchKey:string|null, source:'local'|'auto'|'model'|'none', note?:string, error?:Error }}
      */
     async resolveBranch(state, event, options, playerInput) {
-      const intent = interpretInput(state, event, playerInput);
+      const intent = interpretInput(state, event, playerInput, world);
 
       if (intent.kind === 'key') {
         return { ok: true, branchKey: intent.branchKey, source: 'local', intent };

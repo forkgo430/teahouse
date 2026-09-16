@@ -16,6 +16,8 @@ import { createWorld } from '../src/engine.js';
  * 世界观（给模型用的简短背景）
  * ------------------------------------------------------------------ */
 
+export const OPENING = '你刚搬进这栋旧楼的第一夜。行李还没拆完，窗外的雨一直没停，门外传来脚步声。';
+
 export const WORLD_BRIEF = `现代都市，一栋建了三十多年的旧公寓楼。
 玩家是刚搬进来的住户，第一夜就发现这栋楼不太对劲：深夜有脚步声、门上被贴过通知、配电箱的检修记录被人用铅笔改过。
 楼里目前只认识两个人：管理员老陈（五十多岁，话少，知道的事比说的多）、楼上住户苏黎（三十岁上下，警觉，最近睡不好）。
@@ -449,6 +451,7 @@ export function createDemoWorld(extra = {}) {
     achievements: ACHIEVEMENTS,
     endings: ENDINGS,
     slotLabels: SLOT_LABELS,
+    opening: OPENING,
     brief: WORLD_BRIEF,
     placeLabels: PLACES,
     clueLabels: CLUES,

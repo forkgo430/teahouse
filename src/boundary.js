@@ -49,9 +49,18 @@ export const DEFAULT_SPEC = Object.freeze({
   requireCurrentTurn: true,
 });
 
-/** 当前轮号（已完成轮数；本轮尚未写进 history） */
+/**
+ * 当前轮号 —— **正在进行的这一轮**，从 1 起算。
+ *
+ * 为什么不是 `history.length`：effects 在 recordHistory **之前**执行，
+ * 所以把「表态」动作写进 effects 时，`history.length` 还是上一轮的数。
+ * 若按 history.length 记轮号，表态这一轮记的是 T、下一轮 guard 看到的是 T+1，
+ * 永远对不上，闸门等于永远锁死。
+ * 统一成「正在进行/即将进行的那一轮」，两种写入时机（轮内 effects、两轮之间登记）
+ * 落在同一个数上，语义才自洽。
+ */
 export function currentTurn(state) {
-  return (state.history ?? []).length;
+  return (state.history ?? []).length + 1;
 }
 
 function hasStat(state, actorId, key) {

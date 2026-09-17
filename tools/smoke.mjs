@@ -125,7 +125,24 @@ async function run() {
       area.value = JSON.stringify({ name: '冒烟', entries: { 0: { uid: 0, key: ['x'], content: '正文', order: 1 } } });
       fire(area, 'input');
       await wait(300);
-      R.notes.push('导入预览=' + ((q('.ne-import-preview') || {}).innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 80));
+      const txt = () => ((q('.ne-import-preview') || {}).innerText || '').replace(/\\s+/g, ' ').trim();
+      const asWb = txt();
+      R.notes.push('导入预览=' + asWb.slice(0, 80));
+
+      /* 换分类时下面那个框必须跟着重算。
+         原来切分类只换按钮高亮，框里还留着上一个分类的解析结果 —— 看着像点了没反应。 */
+      const cats = [...document.querySelectorAll('.import-cat')];
+      if (cats.length >= 2) {
+        cats[1].click();
+        await wait(400);
+        const asOther = txt();
+        if (asOther === asWb) {
+          R.missing.push('切到「角色卡」后预览框没变（换分类没重算）');
+        }
+        cats[0].click();
+        await wait(400);
+        if (txt() !== asWb) R.missing.push('切回世界书后预览框没恢复');
+      }
     } else R.missing.push('.ne-modal textarea （导入面板没有粘贴框）');
     const close = [...document.querySelectorAll('.ne-modal button')].find(b => b.textContent.trim() === '关闭');
     if (close) close.click();

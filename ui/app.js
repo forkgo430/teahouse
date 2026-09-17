@@ -2552,6 +2552,31 @@ function startMain(root, opts = {}) {
       { label: '模式（预设）', kind: KIND.PRESET, icon: 'settings', sub: '采样参数 + 系统提示' },
     ];
     let importTab = IMPORT_TABS[0];
+    let lastFile = null;      // 记住选过的文件：换分类时要拿它重新判定一次
+
+    /**
+     * 换分类之后把下面那个框重新算一遍。
+     *
+     * 原先切分类只把按钮的高亮换掉，框里还留着上一个分类的解析结果 ——
+     * 于是"点分类没反应"。内容的判定本来就取决于当前分类
+     * （`importAs` 会对比期望分类），所以换分类必须重算，不是清空。
+     */
+    async function refreshPreview() {
+      const text = paste.value.trim();
+      if (text) {
+        try {
+          describe(importAs(JSON.parse(text), importTab.kind, importTab.label));
+        } catch (e) {
+          describe({ kind: KIND.UNKNOWN, warnings: [`不是合法的 JSON：${e.message}`] });
+        }
+        return;
+      }
+      if (lastFile) {
+        describe(await parseImportFile(lastFile, importTab));
+        return;
+      }
+      describe(null);
+    }
 
     const catRow = el('div', 'ne-import-cats');
     const catBtns = [];
@@ -2565,6 +2590,7 @@ function startMain(root, opts = {}) {
       b.addEventListener('click', () => {
         importTab = t;
         catBtns.forEach(x => x.classList.toggle('is-on', x === b));
+        refreshPreview();     // 换分类 → 下面的框跟着重算
       });
       catBtns.push(b);
       catRow.appendChild(b);
@@ -2656,10 +2682,14 @@ function startMain(root, opts = {}) {
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files?.[0];
       if (!file) return;
+      lastFile = file;
       describe(await parseImportFile(file, importTab));
     });
 
-    enableDrop(preview, async (file) => describe(await parseImportFile(file, importTab)));
+    enableDrop(preview, async (file) => {
+      lastFile = file;
+      describe(await parseImportFile(file, importTab));
+    });
 
     paste.addEventListener('input', () => {
       const text = paste.value.trim();

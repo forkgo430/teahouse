@@ -145,7 +145,7 @@
     --paper: #fbf9f3;
     --paper-hi: #fffefb;
     --paper-line: rgba(122, 100, 66, 0.12);
-    --paper-fiber: rgba(122, 100, 66, 0.035);
+    --paper-fiber: rgba(122, 100, 66, 0.028);
     --paper-gutter: rgba(92, 72, 44, 0.16);
     --spine-lo: #6b5a44;
     --spine-hi: #a08a68;
@@ -1599,14 +1599,19 @@
       max-width: 82vw;
       padding: 18px 15px 30px;
       box-shadow: 0 0 70px -24px #000;
-      transition: transform var(--dur) var(--ease);
+      overflow-x: hidden;
+      transition: right var(--dur) var(--ease);
     }
 
-    .ne-drawer-left { left: 0; transform: translateX(-102%); }
-    .ne-drawer-right { right: 0; transform: translateX(102%); }
-
-    .ne-body.has-left .ne-drawer-left { transform: none; }
-    .ne-body.has-right .ne-drawer-right { transform: none; }
+    /* 窄屏的两个抽屉都用**显示开关**，一律不做位移。
+       位移试过 translate / transform / right 三种，行内 + !important 都压不住
+       （元素上挂了值、computed 纹丝不动）。display 没有这些牵扯，
+       而且窄屏下整块覆盖比滑出更好用。 */
+    .ne-drawer { display: none; }
+    .ne-drawer-left { left: 0; }
+    .ne-drawer-right { right: 0; }
+    .ne-body.has-left .ne-drawer-left { display: block; }
+    .ne-body.has-shelf .ne-drawer-right { display: block; }
 
     .ne-stream,
     .ne-composer-inner { padding-inline: 18px; }
@@ -2043,6 +2048,7 @@
 
   .book {
     position: relative;
+    min-width: 0;
     perspective: 1400px;
     border: 1px solid var(--glass-border);
     border-radius: var(--r);
@@ -2094,7 +2100,7 @@
       2px 0 10px -4px rgba(0, 0, 0, 0.45);
     font-family: var(--serif);
     font-size: 13px;
-    letter-spacing: 0.3em;
+    letter-spacing: 0.22em;
     color: var(--spine-ink);
     text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 8px color-mix(in srgb, var(--tone, var(--accent)) 55%, transparent);
     writing-mode: vertical-rl;
@@ -2122,12 +2128,13 @@
   /* 内页：转轴在左缘（贴着书脊），合上时转出去 */
   .book-body {
     position: relative;
-    padding: 14px 16px 15px 48px;
+    min-width: 0;
+    padding: 14px 14px 15px 46px;
     transform-origin: left center;
     transform-style: preserve-3d;
+    /* 纸纹只留横向一组。两组（横+竖）在窄屏上会读成方格纸，不是纸 */
     background:
       linear-gradient(90deg, var(--paper-gutter), transparent 13%),
-      repeating-linear-gradient(90deg, var(--paper-fiber) 0 1px, transparent 1px 6px),
       repeating-linear-gradient(0deg, var(--paper-fiber) 0 1px, transparent 1px 7px),
       linear-gradient(180deg, var(--paper-hi), var(--paper));
     box-shadow:
@@ -2179,11 +2186,13 @@
     transition: grid-template-rows 0.5s var(--ease-out);
   }
 
-  .book > .book-body { min-height: 0; overflow: hidden; }
+  .book > .book-body { min-width: 0; min-height: 0; overflow: hidden; }
 
   .book.is-closed {
     grid-template-rows: 0fr;
-    min-height: 56px;
+    /* 56px 放不下竖排的三字书名（13px + 0.22em 字距 ≈ 3×17px），
+       会从底部裁掉一个字 —— 手机上"成就书"被截成"成书" */
+    min-height: 78px;
   }
 
   /* ── 涟漪 ──────────────────────────────────────────────
@@ -2273,8 +2282,14 @@
   .shelf-handle:hover .shelf-handle-label,
   .shelf-handle:focus-visible .shelf-handle-label { max-width: 48px; opacity: 1; }
 
-  /* 书架已经开着时，把手让位 */
-  body.has-right .shelf-handle { opacity: 0; pointer-events: none; }
+  /* 书架开着时把手不隐藏 —— 它就是收起书架的按钮（窄屏下没有别的关闭入口）。
+     注意：曾经写成 `body.has-right`，但类实际加在 `.ne-body` 上，这条从未生效。
+     现在由 JS 在把手上切 `.is-open`。 */
+  .shelf-handle.is-open {
+    color: var(--gold);
+    border-color: var(--line-gold);
+    box-shadow: var(--glow-gold);
+  }
 
 
 
@@ -2283,6 +2298,7 @@
     gap: 6px;
     margin-bottom: 10px;
     flex-wrap: wrap;
+    min-width: 0;
   }
 
   .book-tab {
@@ -2316,6 +2332,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 8px;
+    min-width: 0;
     padding: 6px 8px;
     border-radius: 8px;
     font-size: 12.5px;
@@ -2324,6 +2341,13 @@
   }
 
   .book-entry:hover { background: rgba(79, 158, 255, 0.07); color: var(--ink); }
+
+  .book-entry > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .book-entry .ne-tag { flex: none; }
 

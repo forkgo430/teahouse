@@ -443,10 +443,35 @@ function startMain(root, opts = {}) {
   shelfHandle.appendChild(el('span', 'shelf-handle-label', '书架'));
   shelfHandle.setAttribute('aria-label', '打开书架');
   attachRipple(shelfHandle);
-  shelfHandle.addEventListener('click', () => {
-    body.classList.add('has-right');
-    audio.pageTurn();
-  });
+
+  /* 抽屉的收放用**行内样式**兜底。
+     之前只切 `.ne-body.has-right` 类，窄屏下实测类加上了、选择器也匹配，
+     但抽屉的位移没变（被别处的 transform / 层序吃掉）—— 与其继续跟级联较劲，
+     不如把这一步写死在元素上。 */
+  let shelfOpen = false;
+
+  /* 抽屉位移的唯一来源。窄屏（≤960）抽屉是 fixed 覆盖层，靠 translate 滑进滑出；
+     宽屏是网格列，位移必须清掉。样式表里不再出现 translate —— 见 styles.css 的说明。 */
+  const applyShelf = () => {
+    const narrow = window.innerWidth <= 960;
+    // 宽屏：抽屉是网格列，交给 .has-right 切列宽
+    body.classList.toggle('has-right', shelfOpen && !narrow);
+    // 窄屏：抽屉是 fixed 覆盖块，**用 display 开关**。
+    // 位移（translate / transform / right）在这个项目里被合成变换纠缠过，
+    // 行内 + !important 都压不住；display 没有这些牵扯。
+    body.classList.toggle('has-shelf', shelfOpen && narrow);
+  };
+
+  const setShelf = (on) => {
+    shelfOpen = on;
+    applyShelf();
+    shelfHandle.classList.toggle('is-open', on);
+    shelfHandle.setAttribute('aria-label', on ? '收起书架' : '打开书架');
+    if (on) audio.pageTurn();
+  };
+
+  shelfHandle.addEventListener('click', () => setShelf(!shelfOpen));
+  window.addEventListener('resize', applyShelf);
 
   root.appendChild(shelfHandle);
 
@@ -2039,6 +2064,11 @@ function startMain(root, opts = {}) {
       body.classList.add('has-right');
     }
   }
+
+  // 到这里 body / drawerRight 都已初始化，再对一次抽屉位移。
+  // 提前调用会踩 TDZ：Cannot access 'body' before initialization ——
+  // 那会让整个 startMain 崩在半路，页面只剩下的顶栏（实测踩过一次）。
+  applyShelf();
 
   render();
   refreshModelState();

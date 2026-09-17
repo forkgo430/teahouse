@@ -11,7 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { RAINNIGHT_MODE, createRainWorld, rainInitialState } from '../data/mode-rain.js';
+import { RAINNIGHT_MODE, RAIN_PATHS, createRainWorld, rainInitialState } from '../data/mode-rain.js';
 import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch } from '../src/engine.js';
 import { createDemoWorld } from '../data/demo.js';
 import { createInitialState, validateEventSet } from '../src/schema.js';
@@ -442,4 +442,56 @@ test('路线只能一格一格走：上一格没到，下一格推不动', () =>
   s = applyTurn(s, p02, 'A', w).state;
   assert.equal(s.flags.path_seeker, '债务共担');
   assert.equal(s.flags.shared_ledger, true);
+});
+
+test('关系路线能一路推到「伴侣-共享」—— 没有任何机制挡推进', () => {
+  const w = world();
+
+  /* 按正常玩法：把每一步 require 满足掉，然后用 applyTurn 真的推。
+     只要引擎放行，路线就能走到底 —— 这条测试就是防止有人再往
+     路线里塞限制（我加过一次锁，被赢容骂了，撤了）。 */
+  const walk = (ids, setUp) => {
+    let s = initialState();
+    s = applyEffects(s, [
+      { path: 'flags.met_seeker', op: 'set', value: true },
+      { path: 'flags.took_them_in', op: 'set', value: true },
+      { path: 'flags.case_stage', op: 'set', value: 6 },
+    ]).state;
+    for (const id of ids) {
+      const ev = w.events.find(e => e.id === id);
+      assert.ok(ev, `找不到事件 ${id}`);
+      s = applyEffects(s, setUp(ev)).state;
+      s = applyTurn(s, ev, 'A', w).state;
+    }
+    return s;
+  };
+
+  const high = (who) => [{ path: `actors.${who}.stats.trust`, op: 'set', value: 95 }];
+  const safe = [{ path: 'actors.kin.stats.safety', op: 'set', value: 95 }];
+
+  const s1 = walk(['P01', 'P02', 'P03', 'P08'],
+    (ev) => (ev.id === 'P03' || ev.id === 'P08' ? high('seeker') : []));
+  assert.equal(s1.flags.path_seeker, '伴侣-共享', '林晚晴的路线推不到底');
+
+  const s2 = walk(['P01', 'P05', 'P06', 'P09'],
+    (ev) => (ev.id === 'P09'
+      ? [...safe, { path: 'flags.path_kin', op: 'set', value: '情感依赖' }]
+      : []));
+  assert.equal(s2.flags.path_kin, '伴侣-共享', '周若宁的路线推不到底');
+});
+
+test('路线节点表与文档 §4 一致', () => {
+  assert.deepEqual(RAIN_PATHS.seeker,
+    ['暂住', '共同生活', '债务共担', '情感依赖', '伴侣-共享', '决裂']);
+  assert.deepEqual(RAIN_PATHS.kin,
+    ['暂住', '依赖', '共同调查', '情感依赖', '伴侣-共享', '独立', '决裂']);
+});
+
+test('没有任何角色被标成不可推进', () => {
+  const w = world();
+  const st = initialState();
+  for (const [id, a] of Object.entries(st.actors)) {
+    assert.notEqual(a.adult, false, `${id} 被标成了禁止推进`);
+  }
+  assert.ok(Object.keys(st.actors).length >= 5);
 });

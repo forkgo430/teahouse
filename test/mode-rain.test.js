@@ -16,6 +16,7 @@ import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch } from '..
 import { createDemoWorld } from '../data/demo.js';
 import { createInitialState, validateEventSet } from '../src/schema.js';
 import { applyEffects, createStore } from '../src/state.js';
+import { evaluate } from '../src/condition.js';
 import {
   canAdvance, consentEffects, CONSENT, withdrawEffects,
   renegotiateEffects, currentTurn,
@@ -39,11 +40,14 @@ test('用真实 createWorld 能建出雨夜世界', () => {
 
 test('用真实 createInitialState 能建出雨夜初始状态', () => {
   const s = initialState();
-  assert.deepEqual(Object.keys(s.actors).sort(), ['seeker', 'self']);
-  assert.equal(s.actors.seeker.stats.trust, 15);
+  assert.deepEqual(Object.keys(s.actors).sort(), ['collector', 'kin', 'seeker', 'self']);
+  // 数值按《雨与夜 V4.1》§4 的初始值（去掉了与亲密相关的项）
+  assert.equal(s.actors.seeker.stats.trust, 35);
+  assert.equal(s.actors.seeker.stats.pressure, 88);
+  assert.equal(s.actors.kin.stats.anxiety, 72);
   assert.equal(s.clock.day, 1);
   assert.equal(s.where, 'room');
-  assert.equal(s.ledger.cash, 3000);
+  assert.equal(s.ledger.cash, 10000000);
 });
 
 test('世界里的条件字段都是可判定的纯数据，不是代码字符串', () => {
@@ -206,13 +210,16 @@ test('雨夜给出人物与数值的中文标签，UI 不用再露出一堆内�
   assert.equal(w.statLabels.seeker.trust, '信任');
   assert.equal(w.statLabels.self.pressure, '压力');
   assert.equal(w.placeLabels.door, '门外');
+  assert.equal(w.placeLabels.cemetery, '墓园');
+  assert.equal(w.clueLabels.D2, '五百万本息：本金加滚息合计');
+  assert.equal(w.actorLabels.collector, '催收方');
 });
 
-test('R07 谈明白界限 → 开路线；绕开 → 不开', () => {
+test('R27 谈明白界限 → 开路线；绕开 → 不开', () => {
   const w = world();
-  const ev = w.events.find(e => e.id === 'R07');
+  const ev = w.events.find(e => e.id === 'R27');
   let s = initialState();
-  s = applyEffects(s, [{ path: 'flags.took_case', op: 'set', value: true }]).state;
+  s = applyEffects(s, [{ path: 'flags.took_them_in', op: 'set', value: true }]).state;
 
   const agree = applyTurn(s, ev, 'A', w).state;
   assert.equal(agree.routes.seeker, 'open');
@@ -223,9 +230,9 @@ test('R07 谈明白界限 → 开路线；绕开 → 不开', () => {
   assert.equal(defer.flags.boundary_deferred, true);
 });
 
-test('R08 的推进分支：没登记当轮意愿时是灰的，且不会靠保底复活', () => {
+test('R28 的推进分支：没登记当轮意愿时是灰的，且不会靠保底复活', () => {
   const w = world();
-  const ev = w.events.find(e => e.id === 'R08');
+  const ev = w.events.find(e => e.id === 'R28');
   const s = applyEffects(initialState(), [
     { path: 'routes.seeker', op: 'set', value: 'open' },
     { path: 'flags.boundary_agreed', op: 'set', value: true },
@@ -242,9 +249,9 @@ test('R08 的推进分支：没登记当轮意愿时是灰的，且不会靠保�
   assert.throws(() => applyTurn(s, ev, 'A', w), /边界/);
 });
 
-test('登记当轮意愿后 R08 能推进；再走一轮表态过期，又变回灰的', () => {
+test('登记当轮意愿后 R28 能推进；再走一轮表态过期，又变回灰的', () => {
   const w = world();
-  const ev = w.events.find(e => e.id === 'R08');
+  const ev = w.events.find(e => e.id === 'R28');
   let s = applyEffects(initialState(), [
     { path: 'routes.seeker', op: 'set', value: 'open' },
     { path: 'flags.boundary_agreed', op: 'set', value: true },
@@ -305,8 +312,9 @@ test('开场白由世界提供，不是 UI 里写死的一句话', () => {
 test('世界书与地点/线索标签都从模式定义进来', () => {
   const w = world();
   assert.ok(w.book && w.book.entries.length >= 3, '世界书没挂上');
-  assert.equal(w.placeLabels.street, '雨夜街头');
-  assert.equal(w.clueLabels.R01, '求助者留下的伞');
+  assert.equal(w.placeLabels.school, '学校门口');
+  assert.equal(w.clueLabels.S1, '黑色面包车，尾号 842');
+  assert.equal(w.book.entries.length >= 10, true, '世界书条目太少');
 });
 
 /* ---------------------------------------------------------------- *
@@ -317,4 +325,74 @@ test('雨夜模式的状态能进 store 并算指纹', () => {
   const store = createStore(initialState());
   assert.ok(store.getState().actors.seeker);
   assert.doesNotThrow(() => store.getState());
+});
+
+/* ---------------------------------------------------------------- *
+ * 数据规模与"开局不该出事"
+ * ---------------------------------------------------------------- */
+
+test('雨夜模式的数据规模（实测值，改数据时请同步改这里）', () => {
+  const w = world();
+  assert.equal(w.events.length, 29, '事件数变了');
+  assert.equal(w.endings.length, 11, '结局数变了');
+  assert.equal(w.achievements.length, 24, '成就数变了');
+  assert.ok(w.book.entries.length >= 10, '世界书条目太少');
+  assert.equal(Object.keys(RAINNIGHT_MODE.world.clueLabels).length, 18, '线索数变了');
+  assert.equal(Object.keys(w.placeLabels).length, 16, '地点数变了');
+  assert.equal(Object.keys(w.actorLabels).length, 4, '角色数变了');
+});
+
+test('开局不触发任何结局（兜底结局最容易在这里翻车）', () => {
+  const w = world();
+  const s = initialState();
+  for (const end of w.endings) {
+    const hit = evaluate(end.cond ?? null, s) === true;
+    assert.equal(hit, false, `开局就满足了结局「${end.title}」`);
+  }
+});
+
+test('开局不触发任何成就', () => {
+  const w = world();
+  const s = initialState();
+  for (const a of w.achievements) {
+    const hit = evaluate(a.cond ?? null, s) === true;
+    assert.equal(hit, false, `开局就解锁了成就「${a.title}」`);
+  }
+});
+
+test('每个事件的每个分支都能真的走一遍（effects 路径全部合法）', () => {
+  const w = world();
+  for (const ev of w.events) {
+    for (const b of ev.branches) {
+      // 造一个尽量满足的状态：把 require 与 flag 相关的门槛先放开
+      let s = initialState();
+      s = applyEffects(s, [
+        { path: 'flags.met_seeker', op: 'set', value: true },
+        { path: 'flags.heard_debt', op: 'set', value: true },
+        { path: 'flags.took_them_in', op: 'set', value: true },
+        { path: 'flags.boundary_agreed', op: 'set', value: true },
+        { path: 'flags.case_stage', op: 'set', value: 6 },
+        { path: 'clues', op: 'push', value: 'S1' },
+        { path: 'routes.seeker', op: 'set', value: 'open' },
+      ]).state;
+      s = applyEffects(s, consentEffects(s, 'seeker', CONSENT.ACCEPT)).state;
+
+      // 条件不成立的分支本来就该抛，只有 cond=null 的必须能走通
+      if (b.cond !== null && b.cond !== undefined) continue;
+      assert.doesNotThrow(
+        () => applyTurn(s, ev, b.key, w),
+        `${ev.id}.${b.key} 走不通`,
+      );
+    }
+  }
+});
+
+test('自动跑到底会落到一个结局，且线索不会跳阶段', () => {
+  const { state } = autoplay((usable) => usable[0], 60);
+  assert.ok(state.endings.length > 0, '跑了 60 轮都没结局');
+
+  // 阶段不可跳：没有 D3 就不该有 D5 —— D5 只在 R21 之后释放
+  if (state.clues.includes('D5')) {
+    assert.ok(state.clues.includes('D3'), '拿到了 D5 却没有 D3，阶段被跳了');
+  }
 });

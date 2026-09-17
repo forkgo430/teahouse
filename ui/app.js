@@ -435,6 +435,21 @@ function startMain(root, opts = {}) {
 
   topbar.append(brand, spacer, btnSide, btnImport, btnGear);
 
+  /* 右缘把手：平时是一个小圆点，hover 拉成胶囊显示「书架」。
+     原本书架只能靠"鼠标贴到右缘"唤出，没有可见入口 —— 触屏与新手都摸不到。 */
+  const shelfHandle = el('button', 'shelf-handle');
+  shelfHandle.type = 'button';
+  shelfHandle.appendChild(el('i', 'ic ic-book'));
+  shelfHandle.appendChild(el('span', 'shelf-handle-label', '书架'));
+  shelfHandle.setAttribute('aria-label', '打开书架');
+  attachRipple(shelfHandle);
+  shelfHandle.addEventListener('click', () => {
+    body.classList.add('has-right');
+    audio.pageTurn();
+  });
+
+  root.appendChild(shelfHandle);
+
   const body = el('div', 'ne-body');
   const drawerLeft = el('aside', 'ne-drawer ne-drawer-left');
   const main = el('section', 'ne-main');
@@ -861,6 +876,113 @@ function startMain(root, opts = {}) {
    * 右抽屉：书架（人物书 / 世界书 / 成就）
    * ---------------------------------------------------------------- */
 
+  /* 涟漪参数，照 Material Web 的那套来（下面注释里写了出处） */
+  const RIPPLE = {
+    originScale: 0.6,   // 起始圆 = 长边 × 0.6
+    softEdge: 0.35,     // 软边下限，避免小元素上涟漪硬得像块饼
+    softMin: 24,
+    growMs: 450,
+    fadeMs: 375,
+  };
+
+  /**
+   * 涟漪。
+   *
+   * 算法参考 material-components/material-web（Apache-2.0）的 ripple 组件，
+   * 按本项目的零依赖写法重写，未逐行复制其源码。要点三个：
+   *   1. 最大半径取**对角线**（√(w²+h²)）而不是长边 —— 否则方角处扩不满；
+   *   2. 起始圆不大，靠 `scale()` 放大到位 —— 动 transform 比动 width/height 便宜；
+   *   3. 位移从**按下点**走到**元素中心**，所以涟漪是"被按出来的"，不是居中播放。
+   * 松手后单独一段淡出（375ms linear），不跟扩散共用一条缓动。
+   */
+  function attachRipple(node) {
+    node.classList.add('has-ripple');
+    const surface = el('span', 'ripple-surface');
+    node.appendChild(surface);
+
+    const release = (dot) => {
+      const fade = dot.animate(
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: RIPPLE.fadeMs, easing: 'linear', fill: 'forwards' },
+      );
+      fade.onfinish = () => dot.remove();
+      fade.oncancel = () => dot.remove();
+    };
+
+    node.addEventListener('pointerdown', (e) => {
+      const box = node.getBoundingClientRect();
+      const w = box.width || 1;
+      const h = box.height || 1;
+
+      const maxDim = Math.max(w, h);
+      const soft = Math.max(RIPPLE.softEdge * maxDim, RIPPLE.softMin);
+      const initial = Math.max(1, Math.floor(maxDim * RIPPLE.originScale));
+      const maxRadius = Math.sqrt(w * w + h * h) + 10;
+      const scale = (maxRadius + soft) / initial;
+
+      const fromX = e.clientX - box.left - initial / 2;
+      const fromY = e.clientY - box.top - initial / 2;
+      const toX = w / 2 - initial / 2;
+      const toY = h / 2 - initial / 2;
+
+      const dot = el('span', 'ripple-dot');
+      dot.style.width = `${initial}px`;
+      dot.style.height = `${initial}px`;
+      dot.style.transform = `translate(${fromX}px, ${fromY}px) scale(1)`;
+      surface.appendChild(dot);
+
+      const grow = dot.animate(
+        [
+          { transform: `translate(${fromX}px, ${fromY}px) scale(1)` },
+          { transform: `translate(${toX}px, ${toY}px) scale(${scale})` },
+        ],
+        { duration: RIPPLE.growMs, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' },
+      );
+
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        release(dot);
+      };
+      grow.onfinish = finish;
+      node.addEventListener('pointerup', finish, { once: true });
+      node.addEventListener('pointercancel', finish, { once: true });
+      node.addEventListener('pointerleave', finish, { once: true });
+    });
+  }
+
+  /**
+   * 点击书脊翻页开合。
+   * 默认翻开 —— 合着的书看不到内容，不该是默认态。
+   * 转轴在左缘（贴书脊），所以翻开像把封面掀过去，不是整块淡入。
+   */
+  function wireFlip(bookEl, label) {
+    const spine = bookEl.querySelector('.book-spine');
+    if (!spine) return;
+
+    const sync = () => {
+      const closed = bookEl.classList.contains('is-closed');
+      spine.setAttribute('title', `点击${closed ? '翻开' : '合上'}${label}`);
+      spine.setAttribute('aria-label', `${label}：${closed ? '已合上' : '已翻开'}`);
+    };
+
+    const flip = () => {
+      bookEl.classList.toggle('is-closed');
+      sync();
+      audio.pageTurn();
+    };
+
+    spine.setAttribute('role', 'button');
+    spine.setAttribute('tabindex', '0');
+    sync();
+    attachRipple(spine);
+    spine.addEventListener('click', flip);
+    spine.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); }
+    });
+  }
+
   function renderLibrary() {
     drawerRight.innerHTML = '';
     const state = store.getState();
@@ -894,6 +1016,7 @@ function startMain(root, opts = {}) {
     peopleSpine.appendChild(el('i', 'ic ic-users'));
     peopleSpine.appendChild(el('span', null, '人物书'));
     people.append(peopleSpine, peopleBody);
+    wireFlip(people, '人物书');
     drawerRight.appendChild(people);
 
     /* ── 世界书：概要 / 主线 / 任务 ── */
@@ -940,6 +1063,7 @@ function startMain(root, opts = {}) {
     loreSpine.appendChild(el('span', null, '世界书'));
     loreBody.append(tabs, listWrap);
     lore.append(loreSpine, loreBody);
+    wireFlip(lore, '世界书');
     drawerRight.appendChild(lore);
 
     /* ── 成就：已解锁 / 未解锁 ── */
@@ -971,6 +1095,7 @@ function startMain(root, opts = {}) {
     achSpine.appendChild(el('i', 'ic ic-trophy'));
     achSpine.appendChild(el('span', null, '成就'));
     ach.append(achSpine, achBody);
+    wireFlip(ach, '成就书');
     [people, lore, ach].forEach(attachSpot);
     drawerRight.append(people, lore, ach);
   }
@@ -2028,7 +2153,16 @@ function renderBoot(host) {
     b.addEventListener('click', () => {
       writeMode(m.id);
       document.body.classList.toggle('mode-rainnight', m.id === 'rainnight');
-      modeRow.querySelectorAll('.boot-mode').forEach(x => x.classList.toggle('is-on', x === b));
+      modeRow.querySelectorAll('.boot-mode').forEach((x) => {
+        const on = x === b;
+        x.classList.toggle('is-on', on);
+        // 联动：选中态迁移时，另一侧反向轻推一下 —— 让"换过去"这一步看得见
+        if (!on) {
+          x.classList.remove('is-nudged');
+          void x.offsetWidth;
+          x.classList.add('is-nudged');
+        }
+      });
       audio.pick();
     });
     modeRow.appendChild(b);

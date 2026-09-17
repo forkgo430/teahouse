@@ -140,6 +140,17 @@
     --verse-b: #7fb2f0;
     --verse-c: #93a7bd;
     --seigaiha: rgba(47, 125, 225, 0.11);
+
+    /* 书籍质感：内页纸 / 纸的纤维线 / 书脊皮革 / 页口纸叠 */
+    --paper: #fbf9f3;
+    --paper-hi: #fffefb;
+    --paper-line: rgba(122, 100, 66, 0.12);
+    --paper-fiber: rgba(122, 100, 66, 0.035);
+    --paper-gutter: rgba(92, 72, 44, 0.16);
+    --spine-lo: #6b5a44;
+    --spine-hi: #a08a68;
+    --spine-ink: #f6ecd9;
+    --page-edge: rgba(160, 140, 110, 0.42);
   }
 }
 
@@ -1881,6 +1892,15 @@
 
   .boot-mode.is-on .boot-mode-sub { color: var(--gold-dim); }
 
+  /* 联动：选中态迁移时，退下来的一侧轻缩一下再回位 —— 让"换过去"看得见 */
+  .boot-mode.is-nudged { animation: mode-nudge 0.42s var(--ease-out); }
+
+  @keyframes mode-nudge {
+    0% { transform: none; opacity: 1; }
+    40% { transform: scale(0.97); opacity: 0.72; }
+    100% { transform: none; opacity: 1; }
+  }
+
   .boot-item {
     appearance: none;
     display: flex;
@@ -2017,8 +2037,13 @@
 
   /* ── 右侧书架 ───────────────────────────────────────── */
 
+  /* ── 书籍：书封 + 书脊 + 内页 ──────────────────────────
+     内页是一张真纸：暖白底 + 极淡纤维线 + 书脊侧渐晕 + 颗粒，
+     翻开时绕书脊做 3D 旋转（perspective 在 .book 上，转轴在左缘）。 */
+
   .book {
     position: relative;
+    perspective: 1400px;
     border: 1px solid var(--glass-border);
     border-radius: var(--r);
     background: linear-gradient(180deg, var(--plate-top), rgba(47, 125, 225, 0.03)), var(--panel);
@@ -2027,26 +2052,231 @@
     overflow: hidden;
   }
 
+  /* 页口：右缘一小叠纸的断面 */
+  .book::after {
+    content: "";
+    position: absolute;
+    top: 7px;
+    bottom: 7px;
+    right: 0;
+    width: 4px;
+    pointer-events: none;
+    background: repeating-linear-gradient(180deg,
+      var(--page-edge) 0 1px,
+      transparent 1px 3px);
+    opacity: 0.5;
+  }
+
   .book-spine {
     position: absolute;
     inset: 0 auto 0 0;
-    width: 30px;
+    z-index: 3;
+    width: 34px;
     display: grid;
     place-items: center;
-    border-right: 1px solid var(--line);
-    background: linear-gradient(180deg,
-      color-mix(in srgb, var(--tone, var(--accent)) 26%, transparent),
-      color-mix(in srgb, var(--tone, var(--accent)) 6%, transparent));
+    cursor: pointer;
+    border-right: 1px solid rgba(0, 0, 0, 0.35);
+    /* 布面/皮革书脊：左暗右亮，中间一条压槽 */
+    background:
+      linear-gradient(90deg,
+        rgba(0, 0, 0, 0.38) 0,
+        rgba(0, 0, 0, 0.1) 16%,
+        rgba(255, 255, 255, 0.12) 34%,
+        rgba(0, 0, 0, 0.16) 52%,
+        rgba(0, 0, 0, 0.34) 100%),
+      linear-gradient(180deg,
+        color-mix(in srgb, var(--tone, var(--accent)) 62%, var(--spine-lo)),
+        color-mix(in srgb, var(--tone, var(--accent)) 30%, var(--spine-lo)) 55%,
+        color-mix(in srgb, var(--tone, var(--accent)) 52%, var(--spine-lo)));
+    box-shadow:
+      inset -1px 0 0 rgba(0, 0, 0, 0.4),
+      inset 1px 0 0 rgba(255, 255, 255, 0.14),
+      2px 0 10px -4px rgba(0, 0, 0, 0.45);
     font-family: var(--serif);
     font-size: 13px;
     letter-spacing: 0.3em;
-    color: var(--tone, var(--accent-hi));
+    color: var(--spine-ink);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 8px color-mix(in srgb, var(--tone, var(--accent)) 55%, transparent);
     writing-mode: vertical-rl;
     text-orientation: upright;
     user-select: none;
+    transition: filter var(--dur);
   }
 
-  .book-body { padding: 13px 14px 13px 46px; }
+  /* 书脊两端的竹节（布面书的凸起） */
+  .book-spine::before,
+  .book-spine::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    height: 3px;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.35));
+  }
+
+  .book-spine::before { top: 9px; }
+  .book-spine::after { bottom: 9px; }
+
+  .book-spine:hover { filter: brightness(1.12); }
+
+  /* 内页：转轴在左缘（贴着书脊），合上时转出去 */
+  .book-body {
+    position: relative;
+    padding: 14px 16px 15px 48px;
+    transform-origin: left center;
+    transform-style: preserve-3d;
+    background:
+      linear-gradient(90deg, var(--paper-gutter), transparent 13%),
+      repeating-linear-gradient(90deg, var(--paper-fiber) 0 1px, transparent 1px 6px),
+      repeating-linear-gradient(0deg, var(--paper-fiber) 0 1px, transparent 1px 7px),
+      linear-gradient(180deg, var(--paper-hi), var(--paper));
+    box-shadow:
+      inset 1px 0 0 var(--paper-line),
+      inset 0 1px 0 var(--paper-hi),
+      inset -1px 0 0 var(--paper-line),
+      inset 0 -1px 0 var(--paper-line);
+    transition: transform 0.62s var(--ease-out), opacity 0.34s var(--ease);
+  }
+
+  /* 纸的颗粒：内联 SVG 噪声，零外部请求 */
+  .book-body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.055;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* 翻页时从书脊侧压过来的一道阴影 */
+  .book-body::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: linear-gradient(90deg, rgba(0, 0, 0, 0.4), transparent 26%);
+    transition: opacity 0.4s var(--ease);
+  }
+
+  .book.is-closed .book-body {
+    transform: rotateY(-94deg);
+    opacity: 0;
+    pointer-events: none;
+    /* 合上去比翻开快一档：反向收起不是"倒放"，是另一件事 */
+    transition-duration: 0.5s, 0.28s;
+  }
+
+  .book.is-closed .book-body::after { opacity: 1; }
+
+  /* 合上：内页转走、整本书收成一条书脊。
+     用 grid-template-rows 1fr→0fr 让高度也一起收（Chrome 107+ 可过渡），
+     否则内页虽然看不见、位置还占着，会留一条空白。 */
+  .book {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.5s var(--ease-out);
+  }
+
+  .book > .book-body { min-height: 0; overflow: hidden; }
+
+  .book.is-closed {
+    grid-template-rows: 0fr;
+    min-height: 56px;
+  }
+
+  /* ── 涟漪 ──────────────────────────────────────────────
+     surface 是一层裁切罩（跟着元素的圆角走），dot 是那一颗圆。
+     颜色用 currentColor，两套主题不用各写一份。
+     软边：radial-gradient(closest-side, ... max(calc(100% - 34px), 62%) ...)
+     —— 与 Material Web 同一手法，让涟漪边缘化开而不是一刀切。 */
+  .has-ripple { position: relative; overflow: hidden; }
+
+  .ripple-surface {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ripple-dot {
+    position: absolute;
+    left: 0;
+    top: 0;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.26;
+    background: radial-gradient(closest-side,
+      currentColor max(calc(100% - 34px), 62%),
+      transparent 100%);
+  }
+
+  /* ── 右缘书架把手：圆点 → 胶囊 ────────────────────────
+     静止是 44px 圆（只露图标），hover / 键盘聚焦时宽度长成胶囊并推出文字。
+     宽度、间距、文字三者同一条缓动，读起来才是一个整体在长，而不是文字在淡入。 */
+  .shelf-handle {
+    position: fixed;
+    right: 12px;
+    top: 50%;
+    translate: 0 -50%;
+    z-index: 36;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    appearance: none;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--r-pill);
+    background: var(--glass);
+    color: var(--gold-dim);
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+    box-shadow: var(--lift);
+    backdrop-filter: blur(var(--aqua-blur, 14px)) saturate(1.25);
+    -webkit-backdrop-filter: blur(var(--aqua-blur, 14px)) saturate(1.25);
+    transition:
+      width 0.38s var(--ease-out),
+      gap 0.38s var(--ease-out),
+      background var(--dur),
+      color var(--dur),
+      opacity var(--dur);
+  }
+
+  .shelf-handle .ic { width: 18px; height: 18px; flex: none; }
+
+  .shelf-handle-label {
+    display: inline-block;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    font-size: 12.5px;
+    letter-spacing: 0.12em;
+    text-indent: 0.12em;
+    transition: max-width 0.38s var(--ease-out), opacity 0.24s var(--dur);
+  }
+
+  .shelf-handle:hover,
+  .shelf-handle:focus-visible {
+    width: 108px;
+    gap: 8px;
+    background: var(--glass-strong);
+    color: var(--ink);
+  }
+
+  .shelf-handle:hover .shelf-handle-label,
+  .shelf-handle:focus-visible .shelf-handle-label { max-width: 48px; opacity: 1; }
+
+  /* 书架已经开着时，把手让位 */
+  body.has-right .shelf-handle { opacity: 0; pointer-events: none; }
+
+
 
   .book-tabs {
     display: flex;
@@ -2160,6 +2390,16 @@
     --verse-b: #8fb4ff;
     --verse-c: #6b7fa8;
     --seigaiha: rgba(143, 180, 255, 0.10);
+
+    --paper: #101728;
+    --paper-hi: #182136;
+    --paper-line: rgba(143, 180, 255, 0.13);
+    --paper-fiber: rgba(143, 180, 255, 0.04);
+    --paper-gutter: rgba(0, 0, 0, 0.45);
+    --spine-lo: #131a30;
+    --spine-hi: #2b3a63;
+    --spine-ink: #cfdfff;
+    --page-edge: rgba(143, 180, 255, 0.28);
   }
 
   /* 流体是固定色板的 WebGL，不跟着变量走 —— 深色主题下用滤镜压暗，

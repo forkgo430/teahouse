@@ -161,6 +161,10 @@ const ICONS = {
   users: 'assets/icons/users.svg',
   world: 'assets/icons/world.svg',
   rain: 'assets/icons/cloud-rain.svg',
+  // 启动页三入口（原先用 emoji 当图标，headless 与部分字体会渲染成方块）
+  sparkles: 'assets/icons/sparkles.svg',
+  history: 'assets/icons/history.svg',
+  cup: 'assets/icons/cup.svg',
 };
 
 function inlineAsset(relPath) {

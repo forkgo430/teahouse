@@ -134,6 +134,12 @@
     --bubble: color-mix(in srgb, rgb(255 255 255) calc(34% * var(--aqua-frost, 1)), transparent);
     --bubble-line: rgba(19, 45, 83, 0.12);
     --prose: #22384f;
+
+    /* 启动页：文学介绍的三档循环色 + 纹章圆盘（青海波）的线色 */
+    --verse-a: #2f7de1;
+    --verse-b: #7fb2f0;
+    --verse-c: #93a7bd;
+    --seigaiha: rgba(47, 125, 225, 0.11);
   }
 }
 
@@ -1633,7 +1639,8 @@
     inset: 0;
     z-index: 30;
     display: grid;
-    grid-template-rows: 1fr auto;
+    /* 中段留白 / 菜单 / 底部模式条 */
+    grid-template-rows: 1fr auto auto;
     overflow: hidden;
     background: var(--page-bg);
     transition: opacity 0.55s var(--ease), transform 0.55s var(--ease), filter 0.55s var(--ease);
@@ -1647,31 +1654,124 @@
   }
 
   .boot-hero {
+    position: relative;
     display: grid;
     place-content: center;
     text-align: center;
-    padding: 10vh 20px 4vh;
-    gap: 18px;
+    padding: 6vh 20px 2vh;
+    gap: 13px;
+  }
+
+  /* 标题后面的纹章圆盘：青海波（純 CSS 多层 radial-gradient），
+     渐隐收边，只当纸纹用 —— 不抢字，但把"两个字"衬成一块匾。
+     volume 由 --seigaiha 变量控制，两套主题各给一档。 */
+  .boot-hero::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -54%;
+    width: min(520px, 78vw);
+    aspect-ratio: 1;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.62;
+    background-color: transparent;
+    background-image:
+      radial-gradient(circle at 100% 150%, transparent 24%, var(--seigaiha) 25%, var(--seigaiha) 28%, transparent 29%, transparent 36%, var(--seigaiha) 37%, var(--seigaiha) 41%, transparent 42%),
+      radial-gradient(circle at 0 150%, transparent 24%, var(--seigaiha) 25%, var(--seigaiha) 28%, transparent 29%, transparent 36%, var(--seigaiha) 37%, var(--seigaiha) 41%, transparent 42%),
+      radial-gradient(circle at 50% 100%, transparent 10%, var(--seigaiha) 11%, var(--seigaiha) 23%, transparent 24%, transparent 30%, var(--seigaiha) 31%, var(--seigaiha) 43%, transparent 44%, transparent 50%, var(--seigaiha) 51%, var(--seigaiha) 63%, transparent 64%),
+      radial-gradient(circle at 100% 50%, transparent 5%, var(--seigaiha) 6%, var(--seigaiha) 15%, transparent 16%, transparent 20%, var(--seigaiha) 21%, var(--seigaiha) 30%, transparent 31%, transparent 35%, var(--seigaiha) 36%, var(--seigaiha) 45%, transparent 46%),
+      radial-gradient(circle at 0 50%, transparent 5%, var(--seigaiha) 6%, var(--seigaiha) 15%, transparent 16%, transparent 20%, var(--seigaiha) 21%, var(--seigaiha) 30%, transparent 31%, transparent 35%, var(--seigaiha) 36%, var(--seigaiha) 45%, transparent 46%);
+    background-size: 92px 46px;
+    -webkit-mask-image: radial-gradient(closest-side, #000 14%, transparent 64%);
+    mask-image: radial-gradient(closest-side, #000 14%, transparent 64%);
+    animation: crest-drift 28s linear infinite;
+  }
+
+  @keyframes crest-drift {
+    from { background-position: 0 0; }
+    to { background-position: 92px 46px; }
+  }
+
+  .boot-hero > * { position: relative; z-index: 1; }
+
+  /* ── 回纹分隔（纯 CSS，无素材） ─────────────────────── */
+
+  .boot-crest {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 2px;
+  }
+
+  .boot-crest-rule {
+    width: clamp(56px, 16vw, 116px);
+    height: 7px;
+    opacity: 0.9;
+    /* 回纹：竖线组 + 一条中线，叠出回字骨架 */
+    background-image:
+      repeating-linear-gradient(90deg,
+        var(--line-gold) 0 1.5px,
+        transparent 1.5px 7px),
+      linear-gradient(90deg, transparent, var(--gold-dim) 22%, var(--gold-dim) 78%, transparent);
+    background-size: 7px 100%, 100% 1px;
+    background-position: 0 50%, 0 50%;
+    background-repeat: repeat-x, no-repeat;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent);
+  }
+
+  .boot-crest-gem {
+    width: 7px;
+    height: 7px;
+    rotate: 45deg;
+    background: linear-gradient(135deg, var(--gold-hi), var(--gold-lo));
+    box-shadow: 0 0 12px -1px var(--gold);
+    animation: gem-pulse 4.4s ease-in-out infinite;
+  }
+
+  @keyframes gem-pulse {
+    0%, 100% { opacity: 0.62; scale: 0.9; }
+    50% { opacity: 1; scale: 1.08; }
   }
 
   .boot-brand {
     margin: 0;
     font-family: var(--serif);
-    font-size: clamp(52px, 11vw, 96px);
-    font-weight: 500;
+    font-size: clamp(46px, 9.4vw, 82px);
+    font-weight: 600;
     letter-spacing: 0.34em;
     text-indent: 0.34em;
-    background: linear-gradient(180deg, #7fb2f0 0%, #2f7de1 52%, #1d4f9e 100%);
+    /* 主渐变(竖) + 一道斜向白光带(横)：背景拉到 260% 宽，白带才能整幅扫一遍 */
+    background-image:
+      linear-gradient(100deg,
+        transparent 0 41%,
+        color-mix(in srgb, var(--gold-hi) 78%, white) 47%,
+        color-mix(in srgb, white 72%, var(--gold-hi)) 50%,
+        color-mix(in srgb, var(--gold-hi) 78%, white) 53%,
+        transparent 59% 100%),
+      linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 52%, var(--gold-lo) 100%);
+    background-size: 260% 100%, 100% 100%;
+    background-position: 260% 0, 0 0;
+    background-repeat: no-repeat;
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    filter: drop-shadow(0 6px 40px rgba(79, 158, 255, 0.35));
-    animation: boot-float 7s ease-in-out infinite;
+    filter: drop-shadow(0 6px 40px color-mix(in srgb, var(--gold) 32%, transparent));
+    animation: boot-float 7s ease-in-out infinite, brand-sheen 9.5s linear infinite;
   }
 
   @keyframes boot-float {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-8px); }
+  }
+
+  /* 光泽扫过：白带从右侧进来、左侧出去，循环 */
+  @keyframes brand-sheen {
+    from { background-position: 260% 0, 0 0; }
+    to { background-position: -60% 0, 0 0; }
   }
 
   .boot-tagline {
@@ -1697,28 +1797,97 @@
   .boot-verse {
     margin: 0;
     font-family: var(--serif);
-    font-size: 14px;
+    font-size: clamp(13px, 0.5vw + 11px, 15px);
     letter-spacing: 0.14em;
-    color: var(--ink-2);
-    line-height: 2.1;
+    line-height: 2.05;
+    display: grid;
+    justify-items: center;
+  }
+
+  .boot-verse-line { display: block; white-space: nowrap; }
+
+  /* 二级循环变色：
+     一级 —— 每个字在三色之间循环；
+     二级 —— 按 --i 逐字错相（-0.36s/字），
+     于是整句同一时刻呈现一道流动的色波，而不是齐刷刷地闪。 */
+  .boot-verse-ch {
+    display: inline-block;
+    color: var(--verse-a);
+    animation: verse-cycle 7.8s ease-in-out infinite;
+    animation-delay: calc(var(--i) * -0.36s);
+  }
+
+  @keyframes verse-cycle {
+    0%, 100% { color: var(--verse-a); }
+    33% { color: var(--verse-b); }
+    66% { color: var(--verse-c); }
   }
 
   .boot-menu {
     display: flex;
     flex-direction: column;
-    gap: 13px;
+    gap: 10px;
     width: min(430px, 88vw);
     margin: 0 auto;
-    padding: 0 16px 9vh;
+    padding: 0 16px 10px;
   }
+
+  /* ── 底部模式条（茶馆标准 / 雨夜模式） ─────────────── */
+
+  .boot-foot {
+    padding: 0 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .boot-modes {
+    display: flex;
+    gap: 10px;
+    width: min(430px, 88vw);
+    margin: 0 auto;
+    padding: 9px;
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    background: var(--glass);
+    box-shadow: var(--lift);
+    backdrop-filter: blur(var(--aqua-blur, 14px)) saturate(1.25);
+    -webkit-backdrop-filter: blur(var(--aqua-blur, 14px)) saturate(1.25);
+  }
+
+  .boot-mode {
+    appearance: none;
+    flex: 1 1 0;
+    display: grid;
+    gap: 2px;
+    padding: 9px 12px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--ink-2);
+    cursor: pointer;
+    text-align: center;
+    transition: background var(--dur), border-color var(--dur), color var(--dur);
+  }
+
+  .boot-mode-name { font-size: 13px; letter-spacing: 0.16em; text-indent: 0.16em; }
+  .boot-mode-sub { font-size: 10.5px; letter-spacing: 0.07em; color: var(--ink-3); }
+
+  .boot-mode:hover { background: var(--plate); color: var(--ink); }
+
+  .boot-mode.is-on {
+    border-color: var(--line-gold);
+    background: color-mix(in srgb, var(--gold) 12%, transparent);
+    color: var(--gold);
+    box-shadow: var(--glow-gold);
+  }
+
+  .boot-mode.is-on .boot-mode-sub { color: var(--gold-dim); }
 
   .boot-item {
     appearance: none;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     width: 100%;
-    padding: 15px 20px;
+    padding: 12px 18px;
     border: 1px solid var(--glass-border);
     border-radius: var(--r);
     background: var(--glass);
@@ -1841,13 +2010,10 @@
 
   /* ── 齿轮 ───────────────────────────────────────────── */
 
-  .gear-glyph {
-    font-style: normal;
-    display: inline-block;
-    transition: transform 0.5s var(--ease);
-  }
-
-  .ne-icon-btn:hover .gear-glyph { transform: rotate(90deg); }
+  /* 齿轮 hover 旋转。图标由 iconBtn 自带 ——
+     此前额外 prepend 了一个 .gear-glyph，顶栏于是显示两个齿轮 */
+  .ne-icon-btn .ic { transition: transform 0.5s var(--ease); }
+  .ne-icon-btn:hover .ic-settings { transform: rotate(90deg); }
 
   /* ── 右侧书架 ───────────────────────────────────────── */
 
@@ -1989,6 +2155,11 @@
     --bubble: color-mix(in srgb, rgb(17 24 50) calc(62% * var(--aqua-frost, 1)), transparent);
     --bubble-line: rgba(143, 180, 255, 0.18);
     --prose: #dce7ff;
+
+    --verse-a: #cfdfff;
+    --verse-b: #8fb4ff;
+    --verse-c: #6b7fa8;
+    --seigaiha: rgba(143, 180, 255, 0.10);
   }
 
   /* 流体是固定色板的 WebGL，不跟着变量走 —— 深色主题下用滤镜压暗，
@@ -2088,7 +2259,8 @@
   .ne-btn,
   .ne-icon-btn,
   .ne-send,
-  .boot-item { min-height: 46px; }
+  .boot-item,
+  .boot-mode { min-height: 46px; }
 
   .ne-choice { padding-block: 12px; }
   .ne-icon-btn { padding-inline: 14px; }

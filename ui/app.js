@@ -432,7 +432,6 @@ function startMain(root, opts = {}) {
   const btnSide = iconBtn('状态', 'users');
   const btnImport = iconBtn('导入', 'book');
   const btnGear = iconBtn('设置', 'settings');
-  btnGear.prepend(el('i', 'ic ic-settings gear-glyph'));
 
   topbar.append(brand, spacer, btnSide, btnImport, btnGear);
 
@@ -1963,9 +1962,35 @@ function renderBoot(host) {
   const bootAtmos = buildAtmosphere(scene);
 
   const hero = el('div', 'boot-hero');
+
+  /* 装饰：一行回纹分隔（纯 CSS，无素材）。标题上方压一条，把"两个字"撑成一块匾 */
+  const crest = el('div', 'boot-crest');
+  crest.appendChild(el('span', 'boot-crest-rule'));
+  crest.appendChild(el('span', 'boot-crest-gem'));
+  crest.appendChild(el('span', 'boot-crest-rule'));
+  hero.appendChild(crest);
+
   hero.appendChild(el('h1', 'boot-brand', '茶 馆'));
   hero.appendChild(el('p', 'boot-tagline', '通 用 叙 事 引 擎'));
-  hero.appendChild(el('p', 'boot-verse', '一间开在故事里的茶馆。\n每张桌子，都坐着一个没讲完的故事。'));
+
+  /* 文学介绍：两行短句，逐字挂 --i，做**二级**错相循环变色 ——
+     一级是整句的三色循环，二级是每个字按序号延迟，合成一道流动的色波。 */
+  const VERSE = [
+    '雨落檐角，茶凉了再续；',
+    '有人推门，故事便从头再讲一遍。',
+  ];
+  const verse = el('p', 'boot-verse');
+  let chIndex = 0;
+  for (const line of VERSE) {
+    const row = el('span', 'boot-verse-line');
+    for (const ch of line) {
+      const s = el('span', 'boot-verse-ch', ch);
+      s.style.setProperty('--i', String(chIndex++));
+      row.appendChild(s);
+    }
+    verse.appendChild(row);
+  }
+  hero.appendChild(verse);
 
   const menu = el('div', 'boot-menu');
 
@@ -1979,12 +2004,12 @@ function renderBoot(host) {
 
   const imports = { worldbook: [], characters: [] };
 
-  const itemNew = bootItem('🌃', '立即开始', '导入世界书与角色卡 · 配好环境 · 开一壶新茶',
+  const itemNew = bootItem('sparkles', '立即开始', '导入世界书与角色卡 · 配好环境 · 开一壶新茶',
     () => openWizard(scene, imports, () => enter()));
-  const itemCont = bootItem('🕰', '继续游戏',
+  const itemCont = bootItem('history', '继续游戏',
     hasSave ? '从上次的故事接着讲' : '这个模式下还没有存档',
     hasSave ? () => enter({ load: true }) : null);
-  const itemSandbox = bootItem('🍵', '体验模式', '什么都不导入，直接坐下听一段',
+  const itemSandbox = bootItem('cup', '体验模式', '什么都不导入，直接坐下听一段',
     () => enter());
 
   [itemNew, itemCont, itemSandbox].forEach((item) => {
@@ -1992,33 +2017,26 @@ function renderBoot(host) {
     menu.appendChild(item);
   });
 
-  /* 模式行：决定机制与主题 */
-  const modeWrap = el('div');
-  modeWrap.style.cssText = 'text-align:center;margin-top:4px;';
-  const modeRow = el('div', 'book-tabs');
-  modeRow.style.justifyContent = 'center';
+  /* 模式切换：放到页面最底部的独立一条，不再夹在菜单里 */
+  const foot = el('div', 'boot-foot');
+  const modeRow = el('div', 'boot-modes');
   for (const m of [{ id: 'tea', label: '茶馆标准' }, { id: 'rainnight', label: '雨夜模式' }]) {
-    const b = el('button', `book-tab${readMode() === m.id ? ' is-on' : ''}`, m.label);
+    const b = el('button', `boot-mode${readMode() === m.id ? ' is-on' : ''}`);
     b.type = 'button';
+    b.appendChild(el('span', 'boot-mode-name', m.label));
+    b.appendChild(el('span', 'boot-mode-sub', m.id === 'rainnight' ? '边界机制 · 暗色主题' : '通用引擎 · 白玻璃'));
     b.addEventListener('click', () => {
       writeMode(m.id);
       document.body.classList.toggle('mode-rainnight', m.id === 'rainnight');
-      modeRow.querySelectorAll('.book-tab').forEach(x => x.classList.toggle('is-on', x.textContent === m.label));
+      modeRow.querySelectorAll('.boot-mode').forEach(x => x.classList.toggle('is-on', x === b));
       audio.pick();
     });
     modeRow.appendChild(b);
   }
-  modeRow.appendChild(el('span', 'mode-badge', modeLabel(readMode())));
-  modeWrap.appendChild(modeRow);
-  modeWrap.appendChild(el('p', 'boot-item-sub', '模式决定机制与主题 —— 雨夜模式带专属的边界机制与 UI'));
-  menu.appendChild(modeWrap);
+  foot.appendChild(modeRow);
 
-  scene.append(hero, menu);
+  scene.append(hero, menu, foot);
   host.appendChild(scene);
-
-  function modeLabel(m) {
-    return m === 'rainnight' ? '雨夜模式 · 骨架' : '茶馆标准';
-  }
 
   function enter(opts = {}) {
     audio.unlock();

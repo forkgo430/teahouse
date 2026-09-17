@@ -729,8 +729,13 @@ function startMain(root, opts = {}) {
     const top = el('div', 'ne-actor-top');
     top.appendChild(el('span', 'ne-actor-name', actor.name));
     box.appendChild(top);
+    /* 关系路线：模式可以用 flags.path_<角色> 记阶段名（雨夜模式就是这么做的）。
+       没有阶段就退回通用的「开 / 关」表述。 */
+    const stage = store.getState().flags?.[`path_${actor.id}`];
     box.appendChild(el('div', 'ne-actor-route',
-      actor.met ? `关系路线 · ${ROUTE_LABEL[actor.route] ?? actor.route}` : '尚未见面'));
+      actor.met
+        ? `关系路线 · ${stage ?? ROUTE_LABEL[actor.route] ?? actor.route ?? '未开启'}`
+        : '尚未见面'));
 
     for (const s of actor.stats) {
       const row = el('div', 'ne-stat');
@@ -2087,6 +2092,14 @@ function startMain(root, opts = {}) {
   // 提前调用会踩 TDZ：Cannot access 'body' before initialization ——
   // 那会让整个 startMain 崩在半路，页面只剩下的顶栏（实测踩过一次）。
   applyShelf();
+
+  /* BGM：只有带雨的模式有（world.rainLevel > 0）。
+     用户能听到声音的前提是先有过交互 —— 进主界面这一步就是点击，
+     AudioContext 此时解锁，可以直接起。 */
+  if (world.rainLevel > 0) {
+    audio.unlock();
+    audio.bgm.start();
+  }
 
   render();
   refreshModelState();

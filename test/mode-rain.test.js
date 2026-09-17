@@ -40,7 +40,11 @@ test('用真实 createWorld 能建出雨夜世界', () => {
 
 test('用真实 createInitialState 能建出雨夜初始状态', () => {
   const s = initialState();
-  assert.deepEqual(Object.keys(s.actors).sort(), ['collector', 'kin', 'seeker', 'self']);
+  assert.deepEqual(Object.keys(s.actors).sort(), ['collector', 'kin', 'lost', 'seeker', 'self']);
+  // 真名绑定（文档 §4）
+  assert.equal(s.actors.seeker.name, '林晚晴');
+  assert.equal(s.actors.kin.name, '周若宁');
+  assert.equal(s.actors.lost.name, '周世杰');
   // 数值按《雨与夜 V4.1》§4 的初始值（去掉了与亲密相关的项）
   assert.equal(s.actors.seeker.stats.trust, 35);
   assert.equal(s.actors.seeker.stats.pressure, 88);
@@ -206,7 +210,8 @@ function findEvent(id) {
 
 test('雨夜给出人物与数值的中文标签，UI 不用再露出一堆内部 key', () => {
   const w = world();
-  assert.equal(w.actorLabels.seeker, '求助者');
+  assert.equal(w.actorLabels.seeker, '林晚晴');
+  assert.equal(w.actorLabels.kin, '周若宁');
   assert.equal(w.statLabels.seeker.trust, '信任');
   assert.equal(w.statLabels.self.pressure, '压力');
   assert.equal(w.placeLabels.door, '门外');
@@ -333,13 +338,16 @@ test('雨夜模式的状态能进 store 并算指纹', () => {
 
 test('雨夜模式的数据规模（实测值，改数据时请同步改这里）', () => {
   const w = world();
-  assert.equal(w.events.length, 29, '事件数变了');
-  assert.equal(w.endings.length, 11, '结局数变了');
-  assert.equal(w.achievements.length, 24, '成就数变了');
-  assert.ok(w.book.entries.length >= 10, '世界书条目太少');
+  assert.equal(w.events.length, 36, '事件数变了');
+  assert.equal(w.endings.length, 14, '结局数变了');
+  assert.equal(w.achievements.length, 31, '成就数变了');
+  assert.equal(w.book.entries.length, 15, '世界书条目太少');
   assert.equal(Object.keys(RAINNIGHT_MODE.world.clueLabels).length, 18, '线索数变了');
   assert.equal(Object.keys(w.placeLabels).length, 16, '地点数变了');
-  assert.equal(Object.keys(w.actorLabels).length, 4, '角色数变了');
+  assert.equal(Object.keys(w.actorLabels).length, 5, '角色数变了');
+  assert.equal(w.actorLabels.seeker, '林晚晴');
+  assert.equal(w.actorLabels.kin, '周若宁');
+  assert.equal(w.actorLabels.lost, '周世杰');
 });
 
 test('开局不触发任何结局（兜底结局最容易在这里翻车）', () => {
@@ -394,5 +402,60 @@ test('自动跑到底会落到一个结局，且线索不会跳阶段', () => {
   // 阶段不可跳：没有 D3 就不该有 D5 —— D5 只在 R21 之后释放
   if (state.clues.includes('D5')) {
     assert.ok(state.clues.includes('D3'), '拿到了 D5 却没有 D3，阶段被跳了');
+  }
+});
+
+/* ---------------------------------------------------------------- *
+ * 关系路线（非性机制层）
+ * ---------------------------------------------------------------- */
+
+test('关系路线绑的是真名，且起点是「暂住」', () => {
+  const w = world();
+  assert.equal(w.actorLabels.seeker, '林晚晴');
+  assert.equal(w.actorLabels.kin, '周若宁');
+  assert.equal(w.actorLabels.lost, '周世杰');
+
+  const ev = w.events.find(e => e.id === 'R01');
+  let s = initialState();
+  s = applyEffects(s, [{ path: 'flags.met_seeker', op: 'set', value: true }]).state;
+  s = applyTurn(s, ev, 'A', w).state;
+  assert.equal(s.flags.path_seeker, '暂住');
+  assert.equal(s.flags.path_kin, '暂住');
+});
+
+test('路线只能一格一格走：上一格没到，下一格推不动', () => {
+  const w = world();
+  const p02 = w.events.find(e => e.id === 'P02');
+
+  // 还在「暂住」时，P02 的条件（path_seeker == 共同生活）不成立
+  let s = initialState();
+  s = applyEffects(s, [
+    { path: 'flags.took_them_in', op: 'set', value: true },
+    { path: 'flags.case_stage', op: 'set', value: 3 },
+    { path: 'flags.path_seeker', op: 'set', value: '暂住' },
+  ]).state;
+  assert.equal(evaluate(p02.require, s), false, '暂住不该满足共同生活的条件');
+
+  // 走到「共同生活」之后才成立
+  s = applyEffects(s, [{ path: 'flags.path_seeker', op: 'set', value: '共同生活' }]).state;
+  assert.equal(evaluate(p02.require, s), true);
+  s = applyTurn(s, p02, 'A', w).state;
+  assert.equal(s.flags.path_seeker, '债务共担');
+  assert.equal(s.flags.shared_ledger, true);
+});
+
+test('路线里不含成人向节点（口径固定）', () => {
+  const w = world();
+  const stages = [];
+  for (const ev of w.events) {
+    for (const b of ev.branches) {
+      for (const e of (b.effects ?? [])) {
+        if (/^flags\.path_/.test(e.path) && e.op === 'set') stages.push(e.value);
+      }
+    }
+  }
+  assert.ok(stages.length > 0, '一个路线节点都没有');
+  for (const st of stages) {
+    assert.ok(!/伴侣|共享|亲密/.test(st), `出现了不该有的节点：${st}`);
   }
 });

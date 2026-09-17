@@ -28,9 +28,11 @@ import { createConsentGuard } from '../src/boundary.js';
  * ------------------------------------------------------------------ */
 
 const ACTORS = [
+  /* 真名与关系取自《雨与夜 V4.1》§4。
+     只取非性机制层的数值 —— 文档里的「性欲望」一项本模式不实现。 */
   {
     id: 'seeker',
-    name: '求助者',
+    name: '林晚晴',
     stats: [
       { key: 'trust', label: '信任', min: 0, max: 100, init: 35 },
       { key: 'pressure', label: '压力', min: 0, max: 100, init: 88 },
@@ -40,12 +42,12 @@ const ACTORS = [
   },
   {
     id: 'kin',
-    name: '同行的人',
+    name: '周若宁',
     stats: [
       { key: 'safety', label: '安全感', min: 0, max: 100, init: 30 },
       { key: 'trust', label: '信任', min: 0, max: 100, init: 45 },
       { key: 'anxiety', label: '未来焦虑', min: 0, max: 100, init: 72 },
-      { key: 'anger', label: '对失联者愤怒', min: 0, max: 100, init: 70 },
+      { key: 'anger', label: '对父亲愤怒', min: 0, max: 100, init: 70 },
     ],
   },
   {
@@ -55,6 +57,15 @@ const ACTORS = [
       { key: 'pressure', label: '压力', min: 0, max: 100, init: 45 },
       { key: 'weary', label: '疲惫', min: 0, max: 100, init: 30 },
       { key: 'composure', label: '从容', min: 0, max: 100, init: 60 },
+    ],
+  },
+  {
+    id: 'lost',
+    name: '周世杰',
+    stats: [
+      // 本人不在场，这两项是「你对他知道多少」的进度，不是他的情绪
+      { key: 'trail', label: '行踪知情度', min: 0, max: 100, init: 0 },
+      { key: 'blame', label: '责任认定', min: 0, max: 100, init: 0 },
     ],
   },
   {
@@ -141,6 +152,8 @@ const EVENTS = [
           { path: 'where', op: 'set', value: 'door' },
           { path: 'clues', op: 'push', value: 'D0' },
           { path: 'flags.met_seeker', op: 'set', value: true },
+          { path: 'flags.path_seeker', op: 'set', value: '暂住' },
+          { path: 'flags.path_kin', op: 'set', value: '暂住' },
         ],
       },
       {
@@ -1609,6 +1622,268 @@ const EVENTS = [
       },
     ],
   },
+
+  /* ══════════════ 关系路线（非性机制层）══════════════
+     路线阶段存在 flags 里 —— createInitialState 的字段是固定白名单，
+     加不了新字段；flags 本来就是自由对象，条件系统也能直接读。
+
+     阶段取自文档 §4 的「路线节点」，**剔除其中的「伴侣-共享」节点**
+     （成人向，本模式不实现）。剩下的节点是关系结构本身：
+       林晚晴：暂住 → 共同生活 → 债务共担 → 情感依赖 → 决裂
+       周若宁：暂住 → 依赖 → 共同调查 → 情感依赖 → 独立 → 决裂
+     每个事件只推进一格，且必须先处在上一格 —— 路线由玩家自己走，
+     不靠亲密度自动跳。 */
+  {
+    id: 'P01',
+    title: '给她一把钥匙',
+    priority: 150,
+    require: { path: 'flags.took_them_in', op: '==', value: true },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '配一把钥匙给她',
+        keywords: ['钥匙', '配一把', '给她'],
+        cond: null,
+        text: '你把备用钥匙放在桌上，没多说什么。她看了那把钥匙很久，'
+          + '才伸手拿起来，收进风衣内袋。\n\n从这一晚起，她不再算「借住」。',
+        effects: [
+          { path: 'flags.path_seeker', op: 'set', value: '共同生活' },
+          { path: 'actors.seeker.stats.trust', op: 'add', value: 6 },
+          { path: 'actors.seeker.stats.pressure', op: 'add', value: -4 },
+          { path: 'where', op: 'set', value: 'room' },
+        ],
+      },
+      {
+        key: 'B',
+        label: '先维持客人身份',
+        keywords: ['客人', '再说', '不急'],
+        cond: null,
+        text: '你说不急，住着看。她点头，把包放回门边 —— 没有拆开。',
+        effects: [
+          { path: 'actors.seeker.stats.pressure', op: 'add', value: 3 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'P02',
+    title: '把账摊开',
+    priority: 148,
+    require: { all: [
+      { path: 'flags.path_seeker', op: '==', value: '共同生活' },
+      { path: 'flags.case_stage', op: '>=', value: 2 },
+    ] },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '和她一起算这笔账',
+        keywords: ['一起算', '摊开', '算账'],
+        cond: null,
+        text: '你把纸铺开，一项一项写。她没有回避数字，只在写到某个数时停了一下，'
+          + '然后把笔接过去，自己往下写。',
+        effects: [
+          { path: 'flags.path_seeker', op: 'set', value: '债务共担' },
+          { path: 'actors.seeker.stats.trust', op: 'add', value: 8 },
+          { path: 'actors.seeker.stats.dignity', op: 'add', value: 6 },
+          { path: 'flags.shared_ledger', op: 'set', value: true },
+        ],
+      },
+      {
+        key: 'B',
+        label: '这笔账我自己扛',
+        keywords: ['我来', '自己扛', '不用你'],
+        cond: null,
+        text: '你把纸合上，说这事你来。她没争，只是把手从桌沿收了回去。',
+        effects: [
+          { path: 'actors.seeker.stats.pressure', op: 'add', value: 6 },
+          { path: 'actors.self.stats.pressure', op: 'add', value: 8 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'P03',
+    title: '她开始托付',
+    priority: 146,
+    require: { all: [
+      { path: 'flags.path_seeker', op: '==', value: '债务共担' },
+      { path: 'actors.seeker.stats.trust', op: '>=', value: 70 },
+    ] },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '接住她递过来的东西',
+        keywords: ['接住', '收下', '我来保管'],
+        cond: null,
+        text: '她把一个旧信封推过来，说这里面是她一直没敢拿出来的东西。'
+          + '推过来的时候，她的手是稳的。',
+        effects: [
+          { path: 'flags.path_seeker', op: 'set', value: '情感依赖' },
+          { path: 'actors.seeker.stats.trust', op: 'add', value: 6 },
+          { path: 'clues', op: 'push', value: 'S3' },
+        ],
+      },
+      {
+        key: 'B',
+        label: '先把界限说清楚',
+        keywords: ['界限', '说清楚', '不用'],
+        cond: null,
+        text: '你说东西你自己收着，需要的时候你会帮。她愣了半秒，'
+          + '然后把信封收回怀里 —— 表情比刚才松了一点。',
+        effects: [
+          { path: 'actors.seeker.stats.dignity', op: 'add', value: 8 },
+          { path: 'flags.held_back', op: 'set', value: true },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'P04',
+    title: '她今晚不太对',
+    priority: 144,
+    require: { all: [
+      { path: 'flags.path_seeker', op: '!=', value: '决裂' },
+      { path: 'actors.seeker.stats.dignity', op: '<=', value: 40 },
+    ] },
+    fallback: 'A',
+    branches: [
+      {
+        key: 'A',
+        label: '把话说回来',
+        keywords: ['道歉', '说回来', '不是那个意思'],
+        cond: null,
+        text: '你意识到刚才那句话落下去的重量。你把话收回来，'
+          + '重新说了一遍 —— 这次没有替她做决定。',
+        effects: [
+          { path: 'actors.seeker.stats.dignity', op: 'add', value: 12 },
+          { path: 'actors.seeker.stats.trust', op: 'add', value: 4 },
+        ],
+      },
+      {
+        key: 'B',
+        label: '就这样吧',
+        keywords: ['算了', '就这样', '不管'],
+        cond: null,
+        text: '你没再说什么。第二天早上，她的行李收好了，'
+          + '放在门边，摞得很整齐。',
+        effects: [
+          { path: 'flags.path_seeker', op: 'set', value: '决裂' },
+          { path: 'actors.seeker.stats.trust', op: 'add', value: -20 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'P05',
+    title: '给她一个固定位置',
+    priority: 142,
+    require: { path: 'flags.met_seeker', op: '==', value: true },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '把书桌腾给她',
+        keywords: ['书桌', '腾', '位置'],
+        cond: null,
+        text: '你把靠窗那张桌子清空，说以后这归你。她没道谢，'
+          + '第二天桌上多了一摞卷子，边角压得很平。',
+        effects: [
+          { path: 'flags.path_kin', op: 'set', value: '依赖' },
+          { path: 'actors.kin.stats.safety', op: 'add', value: 10 },
+          { path: 'actors.kin.stats.anxiety', op: 'add', value: -4 },
+        ],
+      },
+      {
+        key: 'B',
+        label: '先别动家里的东西',
+        keywords: ['别动', '再说', '不方便'],
+        cond: null,
+        text: '你说东西先别动，住着就好。她「嗯」了一声，'
+          + '把书包抱在腿上坐了一晚上。',
+        effects: [
+          { path: 'actors.kin.stats.safety', op: 'add', value: -5 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'P06',
+    title: '她要跟着去',
+    priority: 140,
+    require: { all: [
+      { path: 'flags.path_kin', op: '==', value: '依赖' },
+      { path: 'flags.case_stage', op: '>=', value: 1 },
+    ] },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '带上她一起查',
+        keywords: ['带上', '一起', '陪我去'],
+        cond: null,
+        text: '她记得比你清楚 —— 时间、颜色、车牌上的三个数。'
+          + '你让她把记得的都写下来，她写得很快，没有停笔。',
+        effects: [
+          { path: 'flags.path_kin', op: 'set', value: '共同调查' },
+          { path: 'actors.kin.stats.anxiety', op: 'add', value: -6 },
+          { path: 'actors.kin.stats.safety', op: 'add', value: 6 },
+          { path: 'clues', op: 'push', value: 'S2' },
+        ],
+      },
+      {
+        key: 'B',
+        label: '让她专心念书',
+        keywords: ['念书', '考试', '别管'],
+        cond: null,
+        text: '你说这些事不用她管，把书念好就行。她点头，'
+          + '回房间关了门 —— 关得比平时重。',
+        effects: [
+          { path: 'actors.kin.stats.anxiety', op: 'add', value: -8 },
+          { path: 'actors.kin.stats.anger', op: 'add', value: 6 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'P07',
+    title: '她想自己去一趟',
+    priority: 138,
+    require: { all: [
+      { path: 'flags.path_kin', op: '==', value: '共同调查' },
+      { path: 'actors.kin.stats.safety', op: '>=', value: 70 },
+    ] },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '让她自己走这一趟',
+        keywords: ['自己去', '放手', '让她去'],
+        cond: null,
+        text: '你只问了一句「几点回来」。她说了时间，然后真的按那个时间回来了 —— '
+          + '手里多了一张折了两道的纸条。',
+        effects: [
+          { path: 'flags.path_kin', op: 'set', value: '独立' },
+          { path: 'flags.kin_alone', op: 'set', value: true },
+          { path: 'actors.kin.stats.safety', op: 'add', value: 8 },
+          { path: 'clues', op: 'push', value: 'S4' },
+        ],
+      },
+      {
+        key: 'B',
+        label: '还是陪着去',
+        keywords: ['陪着', '一起去', '不放心'],
+        cond: null,
+        text: '你说一起去。她没反对，路上一直走在你的后半步。',
+        effects: [
+          { path: 'flags.path_kin', op: 'set', value: '情感依赖' },
+          { path: 'actors.kin.stats.safety', op: 'add', value: 4 },
+        ],
+      },
+    ],
+  },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -1764,6 +2039,44 @@ const ENDINGS = [
     note: '雨停了。事情没有解决，但也没有更坏。',
     cond: { path: 'flags.declined', op: '==', value: true },
   },
+  /* 关系线结局 —— 同样要带轮次前提，否则开局就成立 */
+  {
+    id: 'END_P1',
+    title: '同住的第一个冬天',
+    note: '账摊在同一张纸上，钥匙在同一个抽屉里。',
+    tier: 'A',
+    cond: {
+      all: [
+        afterTurns(MIN_TURNS),
+        { path: 'flags.path_seeker', op: '==', value: '情感依赖' },
+        { path: 'flags.case_stage', op: '>=', value: 4 },
+      ],
+    },
+  },
+  {
+    id: 'END_P2',
+    title: '各自的路',
+    note: '她自己去走了一趟，回来的时候比走的时候稳。',
+    tier: 'A',
+    cond: {
+      all: [
+        afterTurns(MIN_TURNS),
+        { path: 'flags.path_kin', op: '==', value: '独立' },
+      ],
+    },
+  },
+  {
+    id: 'END_P3',
+    title: '门边的行李',
+    note: '摞得很整齐。',
+    tier: 'C',
+    cond: {
+      all: [
+        afterTurns(MIN_TURNS),
+        { path: 'flags.path_seeker', op: '==', value: '决裂' },
+      ],
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -1800,6 +2113,15 @@ const ACHIEVEMENTS = [
   { id: 'A_H02', title: '一句软证词', note: '走廊很长，老人拉着她的手说了两句。', cond: { path: 'clues', op: 'contains', value: 'S8' } },
   { id: 'A_H03', title: '三十米', note: '她没回头，但你一直在。', cond: { path: 'flags.shadowed', op: '==', value: true } },
   { id: 'A_H04', title: '阿砚', note: '角落里有个人，一直在替你们记着。', cond: { path: 'flags.met_anyan', op: '==', value: true } },
+
+  /* 关系线（非性机制层）*/
+  { id: 'A_P01', title: '一把钥匙', note: '她不再算「借住」。', cond: { path: 'flags.path_seeker', op: '==', value: '共同生活' } },
+  { id: 'A_P02', title: '同一张纸上的数字', note: '笔是她自己接过去的。', cond: { path: 'flags.shared_ledger', op: '==', value: true } },
+  { id: 'A_P03', title: '她递过来的东西', note: '推过来的时候，她的手是稳的。', cond: { path: 'flags.path_seeker', op: '==', value: '情感依赖' } },
+  { id: 'A_P04', title: '靠窗那张桌子', note: '第二天桌上多了一摞卷子。', cond: { path: 'flags.path_kin', op: '==', value: '依赖' } },
+  { id: 'A_P05', title: '她写下来的三个数', note: '时间、颜色、车牌。', cond: { path: 'flags.path_kin', op: '==', value: '共同调查' } },
+  { id: 'A_P06', title: '她自己去的那一趟', note: '她按说好的时间回来了。', cond: { path: 'flags.path_kin', op: '==', value: '独立' } },
+  { id: 'A_P07', title: '账摊开过', note: '数字写在同一张纸上。', cond: { path: 'flags.path_seeker', op: '==', value: '债务共担' } },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -1920,6 +2242,39 @@ const WORLDBOOK = [
     keys: ['时间', '拖', '等'],
     order: 40,
     content: '债不等人。连续几轮不推进调查，催收就会自己找上门来。',
+  },
+  {
+    id: 'RN13',
+    heading: '林晚晴',
+    keys: ['林晚晴', '晚晴', '嫂子'],
+    category: '概要',
+    content:
+      '36 岁。周世杰的妻子，{{user}} 的嫂子。雨夜带着女儿前来投奔。\n'
+      + '说话克制、要面子，习惯先把自己收拾整齐再谈事。\n'
+      + '对周世杰：疲惫、失望，但仍认这份夫妻责任。\n'
+      + '对她自己：不肯白拿 —— 帮忙可以，施舍不行。',
+  },
+  {
+    id: 'RN14',
+    heading: '周若宁',
+    keys: ['周若宁', '若宁', '侄女'],
+    category: '概要',
+    content:
+      '18 岁。周世杰的女儿，{{user}} 的侄女，与 {{user}} 无血缘关系。\n'
+      + '嘴硬、要强，先撑住再谈感受。对父亲是愤怒与羞耻。\n'
+      + '在学校门口目击过一辆黑色面包车，尾号 842，停了很久。\n'
+      + '她要的是「被当成能商量的人」，不是被保护起来。',
+  },
+  {
+    id: 'RN15',
+    heading: '周世杰与那笔债',
+    keys: ['周世杰', '世杰', '哥哥', '五百万', '本息'],
+    category: '主线',
+    content:
+      '45 岁。{{user}} 的非血缘兄长，林晚晴的丈夫，周若宁的父亲。\n'
+      + '欠高利贷五百万本息，利息滚动快，留下「抱歉」便条后失联约两周。\n'
+      + '催收方是非正规放贷集团，手段包括红色催告单、上门、人身威胁、记不良记录。\n'
+      + '真相分阶段揭示：债务可切割、可追回，或彻底悬置 —— 取决于你查到哪一步。',
   },
 ];
 

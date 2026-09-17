@@ -152,7 +152,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
      */
     async freeReply({
       state, playerText, persona = null, group = false, stream = true,
-      speakerStrategy = 'natural', allowSelf = false,
+      speakerStrategy = 'natural', allowSelf = false, disabled = [],
     }) {
       if (!hasModel()) return { segments: [], text: '', source: 'none' };
 
@@ -161,9 +161,11 @@ export function createDirector({ world, client = null, onDelta = null, options =
         const lore = loreFor(state, [playerText, ...recentTexts(state)]);
 
         // 在场角色 = 已见过的（met）。没见过的人不该凭空开口。
+        // disabled：被关掉的成员这一轮不开口（酒馆的 disabled_members）
+        const off = new Set((disabled ?? []).map(String));
         const actors = Object.entries(state.actors ?? {})
           .filter(([, a]) => a.met)
-          .map(([id, a]) => ({ id, name: a.name }));
+          .map(([id, a]) => ({ id, name: a.name, disabled: off.has(String(id)) }));
 
         // 上一轮最后开口的人 —— 用来防「同一角色连着说两段」
         const lastFree = [...(state.history ?? [])]

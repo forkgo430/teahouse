@@ -2414,6 +2414,84 @@
     flex: none;
   }
 
+  /* 条目标题是个按钮（点开编辑），但要长得像一行字 —— 
+     书架是拿来看的，多一个"按钮样"的东西就散了。 */
+  .book-entry-title {
+    appearance: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-bottom: 1px dashed transparent;
+    transition: color var(--dur), border-color var(--dur);
+  }
+
+  .book-entry-title:hover {
+    color: var(--gold);
+    border-bottom-color: var(--line-gold);
+  }
+
+  /* 编辑面板：就地展开在条目下方，不跳窗 */
+  .book-entry-edit {
+    margin: 4px 0 10px;
+    padding: 12px 12px 10px;
+    border: 1px solid var(--line-gold);
+    border-radius: var(--r-md, 10px);
+    background: var(--plate-soft, rgba(255, 255, 255, 0.4));
+    animation: edit-open 0.24s var(--ease-out);
+  }
+
+  @keyframes edit-open {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+  }
+
+  .book-entry-edit .ne-field { margin-bottom: 8px; }
+  .book-entry-edit .ne-field-label { font-size: 11px; }
+  .book-entry-edit .ne-modal-actions { margin-top: 8px; gap: 8px; }
+  .book-entry-edit .ne-btn { font-size: 12px; padding: 5px 12px; }
+
+  /* ── 群聊成员开关（酒馆的 disabled_members）──────────────
+     点名字切换。关掉的是「这一轮不让他开口」，不是把人从世界里拿掉，
+     所以视觉上只是变淡，不是消失。 */
+  .ne-member-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 2px;
+  }
+
+  .ne-member {
+    appearance: none;
+    padding: 5px 13px;
+    border: 1px solid var(--line-gold);
+    border-radius: var(--r-pill);
+    background: var(--plate-soft, rgba(255, 255, 255, 0.4));
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 12.5px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all var(--dur) var(--ease);
+  }
+
+  .ne-member:hover { border-color: var(--gold); color: var(--gold); }
+
+  .ne-member.is-off {
+    opacity: 0.4;
+    filter: grayscale(0.7);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+  }
+
   .book-entry-del {
     appearance: none;
     width: 18px;

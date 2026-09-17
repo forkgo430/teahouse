@@ -8,6 +8,8 @@ import {
   normalizeEntry,
   validateWorldbook,
   createWorldbook,
+  updateEntry,
+  removeEntry,
   scanWorldbook,
   renderWorldbook,
 } from '../src/worldbook.js';
@@ -354,4 +356,71 @@ test('estimateTokens 对中文按字估算', () => {
   assert.equal(estimateTokens(null), 0);
   assert.ok(estimateTokens('hello world') < 5);
   assert.ok(estimateTokens('中'.repeat(100)) === 100);
+});
+
+/* ---------------------------------------------------------------- *
+ * 就地改 / 删一条（书架上的编辑面板走这条路）
+ * ---------------------------------------------------------------- */
+
+test('改一条时，界面上没露出来的字段必须原样留着', () => {
+  const raw = [{
+    id: 'L1', heading: '旧标题', keys: ['伞'],
+    content: '旧内容',
+    // 这几个字段界面上没有，但都是从导入带进来的，不能被编辑抹掉
+    depth: 6, position: 'at-depth', scanDepth: 3, recursive: false, order: 42,
+  }];
+  const before = createWorldbook(raw).entries[0];
+  assert.equal(before.depth, 6);
+
+  const next = updateEntry(raw, 'L1', {
+    heading: '新标题', keys: ['伞', '雨'], content: '新内容', constant: false,
+  });
+  const after = createWorldbook(next).entries[0];
+
+  assert.equal(after.heading, '新标题');
+  assert.deepEqual(after.keys, ['伞', '雨']);
+  assert.equal(after.content, '新内容');
+
+  // 没被 patch 的字段一个都不能变
+  assert.equal(after.depth, 6, 'depth 被抹掉了');
+  assert.equal(after.position, 'at-depth', 'position 被抹掉了');
+  assert.equal(after.scanDepth, 3, 'scanDepth 被抹掉了');
+  assert.equal(after.recursive, false, 'recursive 被抹掉了');
+  assert.equal(after.order, 42, 'order 被抹掉了');
+});
+
+test('改条目不能把 id 改掉（id 是定位用的）', () => {
+  const next = updateEntry([{ id: 'L1', content: 'x' }], 'L1', { id: 'L9', content: 'y' });
+  assert.equal(next[0].id, 'L1');
+  assert.equal(next[0].content, 'y');
+});
+
+test('改一条只影响那一条', () => {
+  const raw = [
+    { id: 'L1', content: 'A' },
+    { id: 'L2', content: 'B' },
+  ];
+  const next = updateEntry(raw, 'L1', { content: 'A2' });
+  assert.deepEqual(next.map(e => e.content), ['A2', 'B']);
+  assert.equal(raw[0].content, 'A', '原数组不该被改动');
+});
+
+test('删一条只少那一条', () => {
+  const raw = [{ id: 'L1' }, { id: 'L2' }, { id: 'L3' }];
+  assert.deepEqual(removeEntry(raw, 'L2').map(e => e.id), ['L1', 'L3']);
+  assert.equal(raw.length, 3, '原数组不该被改动');
+});
+
+test('关键词清空时自动常驻 —— 否则这条永远等不到触发', () => {
+  const raw = [{ id: 'L1', heading: 'H', keys: ['a'], content: '内容' }];
+  // 界面上把关键词删光、就自动勾上常驻（ui/app.js 的那条 constant 规则）
+  const next = updateEntry(raw, 'L1', { keys: [], content: '内容', constant: true });
+  const book = createWorldbook(next);
+  assert.equal(book.entries[0].constant, true);
+});
+
+test('内容清空会被校验挡住 —— 空条目不该悄悄存进去', () => {
+  const raw = [{ id: 'L1', heading: 'H', keys: ['a'], content: '内容' }];
+  const next = updateEntry(raw, 'L1', { content: '' });
+  assert.throws(() => createWorldbook(next), /必须有 content/);
 });

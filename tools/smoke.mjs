@@ -140,7 +140,7 @@ async function run() {
 
     // 玩法段：推进方式 / 群聊 / 玩家设定 —— 这三个开关是后来加的
     const modalText = (q('.ne-modal') || {}).innerText || '';
-    for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '这一轮谁开口', '点名谁谁答', '你（玩家）的名字', '你（玩家）的设定']) {
+    for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '这一轮谁开口', '点名谁谁答', '谁可以不开口', '你（玩家）的名字', '你（玩家）的设定', '设定放在哪', '以什么身份发']) {
       if (!modalText.includes(label)) R.missing.push('设置面板缺「' + label + '」');
     }
   } else R.missing.push('.ne-icon-btn 设置');
@@ -183,6 +183,28 @@ async function run() {
     const hcs = getComputedStyle(handle);
     if (hcs.position !== 'fixed') {
       R.missing.push('书架把手 position=' + hcs.position + '（应为 fixed，掉进文档流会浮在书本中间）');
+    }
+
+    // 世界书条目：点标题要能展开编辑面板（原先只能整份导入，没处改）
+    const title = q('.book-entry-title');
+    if (!title) {
+      R.missing.push('.book-entry-title（世界书条目不能点开编辑）');
+    } else {
+      title.click();
+      await wait(400);
+      const edit = q('.book-entry-edit');
+      if (!edit) {
+        R.missing.push('点了条目标题但没展开编辑面板');
+      } else {
+        const et = edit.innerText || '';
+        for (const label of ['标题', '关键词', '内容', '保存']) {
+          if (!et.includes(label)) R.missing.push('编辑面板缺「' + label + '」');
+        }
+        // 再点一次应收起
+        title.click();
+        await wait(300);
+        if (q('.book-entry-edit')) R.missing.push('再点标题没收起编辑面板');
+      }
     }
 
     const books = document.querySelectorAll('.book');

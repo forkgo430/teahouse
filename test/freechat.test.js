@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildFreeMessages, parseSegments, segmentsToText, personaLines, pickSpeakers,
+  placePersona,
 } from '../src/freechat.js';
 
 /* ---------------------------------------------------------------- *
@@ -155,4 +156,78 @@ test('群聊时提示词里写明这一轮该谁回应', () => {
     actors: CAST, speakers: ['林晚晴'],
   })[0].content;
   assert.match(sys, /这一轮请让这些角色回应：林晚晴/);
+});
+
+/* ---------------------------------------------------------------- *
+ * 玩家设定放在哪（参考酒馆 persona 的 position / depth / role）
+ * ---------------------------------------------------------------- */
+
+const PERSONA = { name: '我', desc: '三十岁，做装修的' };
+
+test('默认位置：设定拼进 system，消息条数不变', () => {
+  const msgs = buildFreeMessages({ brief: 'B', playerText: '在吗', persona: PERSONA });
+  assert.equal(msgs.length, 2);
+  assert.equal(msgs[0].role, 'system');
+  assert.match(msgs[0].content, /玩家扮演：我/);
+});
+
+test('top：设定单独一条放在最前', () => {
+  const msgs = buildFreeMessages({ playerText: '在吗', persona: { ...PERSONA, position: 'top' } });
+  assert.equal(msgs[0].role, 'system');
+  assert.match(msgs[0].content, /玩家扮演：我/);
+  assert.equal(msgs[msgs.length - 1].content, '在吗');
+});
+
+test('bottom：设定紧贴玩家这句话之前', () => {
+  const msgs = buildFreeMessages({
+    brief: 'B', history: [{ said: '上一句', text: '上一答' }],
+    playerText: '在吗', persona: { ...PERSONA, position: 'bottom' },
+  });
+  const idx = msgs.findIndex(m => /玩家扮演：我/.test(m.content));
+  assert.equal(idx, msgs.length - 2, '设定应紧贴在最后那句之前');
+  assert.equal(msgs[msgs.length - 1].content, '在吗');
+});
+
+test('at-depth：插在距末尾 depth 条处', () => {
+  const history = [];
+  for (let i = 1; i <= 5; i += 1) history.push({ said: `问${i}`, text: `答${i}` });
+  const msgs = buildFreeMessages({
+    brief: 'B', history, playerText: '在吗',
+    persona: { ...PERSONA, position: 'at-depth', depth: 2 },
+  });
+  // system + 5×2 + user = 12 条；depth 2 → 插在 index 10（倒数第 3 条）
+  assert.equal(msgs.length, 13);
+  assert.match(msgs[msgs.length - 3].content, /玩家扮演：我/);
+});
+
+test('at-depth 再深也不会挤到 system 前面', () => {
+  const msgs = buildFreeMessages({
+    brief: 'B', playerText: '在吗',
+    persona: { ...PERSONA, position: 'at-depth', depth: 99 },
+  });
+  assert.equal(msgs[0].role, 'system');
+  assert.doesNotMatch(msgs[0].content, /玩家扮演：我/, 'system 位应由 brief 占着');
+  assert.match(msgs[1].content, /玩家扮演：我/);
+});
+
+test('role 可选 user / assistant', () => {
+  const asUser = buildFreeMessages({ playerText: 'x', persona: { ...PERSONA, position: 'top', role: 'user' } });
+  assert.equal(asUser[0].role, 'user');
+  const bogus = buildFreeMessages({ playerText: 'x', persona: { ...PERSONA, position: 'top', role: '上帝' } });
+  assert.equal(bogus[0].role, 'system', '非法 role 退回 system');
+});
+
+test('没填设定时，位置设置不产生空消息', () => {
+  for (const position of ['in-prompt', 'top', 'bottom', 'at-depth']) {
+    const msgs = buildFreeMessages({ brief: 'B', playerText: '在吗', persona: { name: '', desc: '', position } });
+    assert.equal(msgs.length, 2, `${position} 多出空消息`);
+  }
+});
+
+test('被禁用的成员不会出现在这一轮的发言名单里', () => {
+  const got = pickSpeakers({
+    actors: [{ id: 'a', name: '林晚晴' }, { id: 'b', name: '周若宁', disabled: true }],
+    playerText: '周若宁，你说', strategy: 'natural',
+  });
+  assert.deepEqual(got.map(a => a.name), ['林晚晴'], '点名了也不该让被禁用的开口');
 });

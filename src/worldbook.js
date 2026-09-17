@@ -130,6 +130,34 @@ export function validateWorldbook(entries) {
   return { ok: issues.length === 0, issues };
 }
 
+/**
+ * 改一条世界书条目。
+ *
+ * 关键在「**展开原条目再覆盖改动字段**」：界面上只给标题 / 关键词 / 内容 /
+ * 常驻四项，但条目还有 depth / position / scanDepth / recursive / order 这些
+ * 从导入带进来的字段。直接构造新对象等于把它们悄悄抹掉 —— 触发位置和
+ * 递归行为会跟着变，而且看不出来。所以先整份复制，再盖改过的键。
+ *
+ * @param {object[]} entries 原条目数组
+ * @param {string} id 要改的条目 id
+ * @param {object} patch 只放改动的字段
+ * @returns {object[]} 新数组（原数组不动）
+ */
+export function updateEntry(entries = [], id, patch = {}) {
+  return entries.map((e) => {
+    if (String(e.id) !== String(id)) return e;
+    const base = typeof structuredClone === 'function'
+      ? structuredClone(e)
+      : JSON.parse(JSON.stringify(e));
+    return { ...base, ...patch, id: e.id };   // id 不允许被 patch 改掉
+  });
+}
+
+/** 删一条世界书条目 */
+export function removeEntry(entries = [], id) {
+  return entries.filter(e => String(e.id) !== String(id));
+}
+
 export function createWorldbook(entries = []) {
   const normalized = entries.map((e, i) => normalizeEntry(e, i));
   const { ok, issues } = validateWorldbook(normalized);

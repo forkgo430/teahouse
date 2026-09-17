@@ -27,7 +27,7 @@ import { labelForPath, resolveValue } from '../src/narrator.js';
 import { defaultStack, buildSystemMessage } from '../src/prompts.js';
 import { budgetStatus } from '../src/context.js';
 import { importAny, importAs, importPngCard, KIND } from '../src/importers.js';
-import { createWorldbook } from '../src/worldbook.js';
+import { createWorldbook, updateEntry, removeEntry } from '../src/worldbook.js';
 import { canAdvance, CONSENT, consentEffects, withdrawEffects, renegotiateEffects } from '../src/boundary.js';
 import { DEFAULT_VARIANT_COUNT, MAX_VARIANTS, variantsOf, swipeState, stepVariant, selectVariantEffects } from '../src/swipe.js';
 import { createAtmosphere } from './atmosphere.js';
@@ -270,6 +270,10 @@ const MODE_KEY = 'ne.mode';
    与模型配置同层，存在本地 —— 换模式不丢，清数据才没。 */
 const CHAT_KEY = 'ne.chat.driver';
 const GROUP_KEY = 'ne.chat.group';
+const DISABLED_KEY = 'ne.chat.disabled';
+const PERSONA_POS_KEY = 'ne.persona.position';
+const PERSONA_DEPTH_KEY = 'ne.persona.depth';
+const PERSONA_ROLE_KEY = 'ne.persona.role';
 const PERSONA_NAME_KEY = 'ne.persona.name';
 const PERSONA_DESC_KEY = 'ne.persona.desc';
 
@@ -300,14 +304,40 @@ function readGroup() {
 function writeGroup(on) {
   try { storage?.setItem(GROUP_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
 }
+function readDisabled() {
+  try {
+    const v = JSON.parse(storage?.getItem(DISABLED_KEY) ?? '[]');
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch { return []; }
+}
+function writeDisabled(list) {
+  try {
+    storage?.setItem(DISABLED_KEY, JSON.stringify([...new Set((list ?? []).map(String))]));
+  } catch { /* 忽略 */ }
+}
+
 function readPersona() {
   try {
     return {
       name: storage?.getItem(PERSONA_NAME_KEY) ?? '',
       desc: storage?.getItem(PERSONA_DESC_KEY) ?? '',
+      // 位置 / 深度 / 角色 —— 参考酒馆 persona 的 position / depth / role
+      position: storage?.getItem(PERSONA_POS_KEY) ?? 'in-prompt',
+      depth: Number(storage?.getItem(PERSONA_DEPTH_KEY) ?? 4) || 0,
+      role: storage?.getItem(PERSONA_ROLE_KEY) ?? 'system',
     };
-  } catch { return { name: '', desc: '' }; }
+  } catch {
+    return { name: '', desc: '', position: 'in-prompt', depth: 4, role: 'system' };
+  }
 }
+function writePersonaExtra({ position, depth, role }) {
+  try {
+    if (position) storage?.setItem(PERSONA_POS_KEY, position);
+    if (depth !== undefined) storage?.setItem(PERSONA_DEPTH_KEY, String(depth));
+    if (role) storage?.setItem(PERSONA_ROLE_KEY, role);
+  } catch { /* 忽略 */ }
+}
+
 function writePersona(name, desc) {
   try {
     storage?.setItem(PERSONA_NAME_KEY, name ?? '');
@@ -1164,20 +1194,22 @@ function startMain(root, opts = {}) {
       }
       for (const e of entries) {
         const entry = el('div', 'book-entry');
-        entry.appendChild(el('span', null, e.heading ?? e.id));
+
+        // 标题可点 —— 展开编辑（原先世界书只能整份导，导错了没处改）
+        const title = el('button', 'book-entry-title', e.heading ?? e.id);
+        title.type = 'button';
+        title.title = '点一下改这条';
+        entry.appendChild(title);
 
         const right = el('span', 'book-entry-right');
         right.appendChild(el('span', 'ne-tag', e.keys.length ? e.keys[0] : '常驻'));
 
-        /* 导错了的世界书条目要能单独删掉 ——
-           原先只能整份导入、没法改，删错就得「清除全部本地数据」。 */
         const del = el('button', 'book-entry-del', '×');
         del.type = 'button';
         del.title = `删掉这条：${e.heading ?? e.id}`;
         del.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          const rest = (world.book?.entries ?? []).filter(x => x.id !== e.id);
-          world.book = createWorldbook(rest);
+          world.book = createWorldbook(removeEntry(world.book?.entries ?? [], e.id));
           audio.toggle(false);
           appendSystem(`已删除世界书条目「${e.heading ?? e.id}」`, 'warn');
           render();
@@ -1185,8 +1217,78 @@ function startMain(root, opts = {}) {
         right.appendChild(del);
 
         entry.appendChild(right);
-        entry.title = e.content;
         listWrap.appendChild(entry);
+
+        /* 编辑面板就地展开在条目下方 —— 不跳窗，改完还能对着上下文看。
+           保存时**展开原条目再覆盖改动字段**：depth / position / scanDepth /
+           递归 这些字段界面上没有，但必须原样留着，不能被这次编辑抹掉。 */
+        title.addEventListener('click', () => {
+          const next = entry.nextElementSibling;
+          if (next && next.classList.contains('book-entry-edit')) { next.remove(); return; }
+
+          const box = el('div', 'book-entry-edit');
+
+          const hRow = el('label', 'ne-field');
+          hRow.appendChild(el('span', 'ne-field-label', '标题'));
+          const hIn = el('input', 'ne-field-input');
+          hIn.type = 'text';
+          hIn.value = e.heading ?? '';
+          hIn.placeholder = e.id;
+          hRow.appendChild(hIn);
+
+          const kRow = el('label', 'ne-field');
+          kRow.appendChild(el('span', 'ne-field-label', '关键词（逗号分隔，留空＝常驻）'));
+          const kIn = el('input', 'ne-field-input');
+          kIn.type = 'text';
+          kIn.value = (e.keys ?? []).join('，');
+          kRow.appendChild(kIn);
+
+          const cRow = el('label', 'ne-field');
+          cRow.appendChild(el('span', 'ne-field-label', '内容'));
+          const cIn = el('textarea', 'ne-field-area');
+          cIn.rows = 4;
+          cIn.value = e.content ?? '';
+          cRow.appendChild(cIn);
+
+          let constOn = e.constant === true;
+          const cBtn = el('button', 'ne-btn', constOn ? '常驻注入：已开启' : '常驻注入：已关闭');
+          cBtn.type = 'button';
+          cBtn.title = '开启后不看关键词，每一轮都注入';
+          cBtn.addEventListener('click', () => {
+            constOn = !constOn;
+            cBtn.textContent = constOn ? '常驻注入：已开启' : '常驻注入：已关闭';
+          });
+
+          const acts = el('div', 'ne-modal-actions');
+          const ok = el('button', 'ne-btn ne-btn-primary', '保存');
+          ok.type = 'button';
+          ok.addEventListener('click', () => {
+            const keys = kIn.value.split(/[,，\s]+/).map(x => x.trim()).filter(Boolean);
+            try {
+              world.book = createWorldbook(updateEntry(world.book?.entries ?? [], e.id, {
+                heading: hIn.value.trim() || null,
+                keys,
+                content: cIn.value,
+                // 有关键词就不必常驻；一个关键词都没有时必须常驻，
+                // 否则这条永远等不到触发
+                constant: constOn || keys.length === 0,
+              }));
+              audio.pick();
+              appendSystem(`已保存世界书条目「${hIn.value.trim() || e.id}」`, 'good');
+              render();
+            } catch (err) {
+              appendSystem(`这条存不下：${err.message}`, 'warn');
+            }
+          });
+          const cancel = el('button', 'ne-btn', '取消');
+          cancel.type = 'button';
+          cancel.addEventListener('click', () => box.remove());
+          acts.append(ok, cancel);
+
+          box.append(hRow, kRow, cRow, cBtn, acts);
+          entry.after(box);
+          audio.toggle(true);
+        });
       }
     }
 
@@ -1618,6 +1720,48 @@ function startMain(root, opts = {}) {
       '默认不让同一个角色连着说两段 —— 这条是从酒馆的群聊学来的，不然容易变成自问自答。'));
     play.appendChild(spkField);
 
+    /* 谁不开口 —— 酒馆的 disabled_members。
+       人多了以后总有人不该接话（还没出场的、正在忙别的），
+       又不能让他从状态里消失，所以给他们各自一个开关。 */
+    const memField = el('div', 'ne-field');
+    memField.appendChild(el('span', 'ne-field-label', '谁可以不开口'));
+    const memWrap = el('div', 'ne-member-list');
+
+    const renderMembers = () => {
+      memWrap.innerHTML = '';
+      const off = new Set(readDisabled());
+      const cast = Object.entries(store.getState().actors ?? {})
+        .filter(([, a]) => a.met)
+        .map(([id, a]) => ({ id, name: a.name }));
+
+      if (cast.length === 0) {
+        // 空态要说清为什么空 —— 只写「还没有见过的角色」会让人以为开关坏了。
+        // 在场名单本身就是「已经见过的人」，没见过的人本来也不会开口。
+        memWrap.appendChild(el('p', 'ne-modal-note',
+          '还没有见过任何角色。见过的角色会出现在这里，届时可以逐个关掉 —— '
+          + '没见过的本来也不会开口，所以现在没什么可关的。'));
+        return;
+      }
+
+      for (const a of cast) {
+        const chip = el('button', `ne-member${off.has(a.id) ? ' is-off' : ''}`, a.name);
+        chip.type = 'button';
+        chip.title = off.has(a.id) ? '点一下让他重新开口' : '点一下让他这一轮不开口';
+        chip.addEventListener('click', () => {
+          const cur = new Set(readDisabled());
+          if (cur.has(a.id)) cur.delete(a.id); else cur.add(a.id);
+          writeDisabled([...cur]);
+          renderMembers();
+        });
+        memWrap.appendChild(chip);
+      }
+    };
+    renderMembers();
+    memField.appendChild(memWrap);
+    memField.appendChild(el('p', 'ne-modal-note',
+      '点名字切换。被关掉的角色仍在场、数值照常，只是这一轮不让他说话。'));
+    play.appendChild(memField);
+
     const pn = readPersona();
     const pName = el('label', 'ne-field');
     pName.appendChild(el('span', 'ne-field-label', '你（玩家）的名字'));
@@ -1635,11 +1779,82 @@ function startMain(root, opts = {}) {
     pDescArea.placeholder = '年龄、身份、与在场角色的关系…… 只喂给模型，不进数值系统';
     pDesc.appendChild(pDescArea);
 
+    /* 设定放在哪 —— 参考酒馆 persona 的 position / depth / role。
+       放 system 里最省事，但离当前这句太远时模型对「你是谁」的注意力会掉；
+       放到末尾能把这一点拉回来。 */
+    const posField = el('div', 'ne-field');
+    posField.appendChild(el('span', 'ne-field-label', '设定放在哪'));
+    const posRow = el('div', 'ne-modal-actions');
+    posRow.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;';
+
+    const DEPTH_ROW = el('div', 'ne-modal-actions');
+    DEPTH_ROW.style.cssText = 'justify-content:flex-start;margin-top:6px;align-items:center;';
+
+    let personaPos = pn.position;
+
+    const syncDepthRow = () => {
+      DEPTH_ROW.style.display = personaPos === 'at-depth' ? '' : 'none';
+    };
+
+    for (const [v, label, hint] of [
+      ['in-prompt', '系统提示里', '拼进 system —— 最省 token'],
+      ['top', '放最前', '单独一条，放在对话最前面'],
+      ['bottom', '放最后', '单独一条，紧贴你这句话之前'],
+      ['at-depth', '指定深度', '插在距末尾若干条处 —— 越靠后，模型越在意'],
+    ]) {
+      const b = el('button', `ne-btn${personaPos === v ? ' ne-btn-primary' : ''}`, label);
+      b.type = 'button';
+      b.title = hint;
+      b.addEventListener('click', () => {
+        personaPos = v;
+        posRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
+        syncDepthRow();
+      });
+      posRow.appendChild(b);
+    }
+    posField.appendChild(posRow);
+
+    const depthLab = el('span', 'ne-field-label', '距末尾');
+    depthLab.style.margin = '0 8px 0 0';
+    const depthIn = el('input', 'ne-field-input rx-mini');
+    depthIn.type = 'number';
+    depthIn.min = '0';
+    depthIn.max = '40';
+    depthIn.value = String(pn.depth);
+    depthIn.style.cssText = 'width:64px;';
+    const depthNote = el('span', 'ne-modal-note', '条（0 = 紧贴你这句话）');
+    depthNote.style.margin = '0';
+    DEPTH_ROW.append(depthLab, depthIn, depthNote);
+    posField.appendChild(DEPTH_ROW);
+    syncDepthRow();
+
+    const roleRow = el('div', 'ne-modal-actions');
+    roleRow.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;margin-top:8px;';
+    roleRow.appendChild(el('span', 'ne-field-label', '以什么身份发'));
+    let personaRole = pn.role;
+    for (const [v, label] of [['system', '系统'], ['user', '玩家'], ['assistant', '角色']]) {
+      const b = el('button', `ne-btn${personaRole === v ? ' ne-btn-primary' : ''}`, label);
+      b.type = 'button';
+      b.title = v === 'user' ? '有些模型对「第一人称设定」反应更好' : '';
+      b.addEventListener('click', () => {
+        personaRole = v;
+        roleRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
+      });
+      roleRow.appendChild(b);
+    }
+    posField.appendChild(roleRow);
+    play.appendChild(posField);
+
     const pSave = el('div', 'ne-modal-actions');
     const pSaveBtn = el('button', 'ne-btn ne-btn-primary', '保存玩家设定');
     pSaveBtn.type = 'button';
     pSaveBtn.addEventListener('click', () => {
       writePersona(pNameInput.value.trim(), pDescArea.value.trim());
+      writePersonaExtra({
+        position: personaPos,
+        depth: Math.max(0, Math.min(40, Number(depthIn.value) || 0)),
+        role: personaRole,
+      });
       appendSystem('玩家设定已保存', 'good');
     });
     pSave.appendChild(pSaveBtn);
@@ -2019,6 +2234,7 @@ function startMain(root, opts = {}) {
         group: readGroup(),
         speakerStrategy: readSpeakerStrategy(),
         allowSelf: readAllowSelf(),
+        disabled: readDisabled(),
         stream: false,
       });
 

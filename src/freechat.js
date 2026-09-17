@@ -26,6 +26,52 @@ export function personaLines(persona) {
 }
 
 /**
+ * 把玩家设定放到指定位置。
+ *
+ * 做法参考酒馆 persona 的 `position` / `depth` / `role`
+ * （SillyTavern，AGPL-3.0，只取思路、代码自写）：
+ *
+ *   in-prompt（默认）—— 拼进 system 提示
+ *   top              —— 单独一条，放在最前
+ *   bottom           —— 单独一条，紧贴玩家这句话之前
+ *   at-depth         —— 插在距末尾 depth 条处（depth 0 = 紧贴末尾）
+ *
+ * 为什么要能换位置：设定放 system 里最省事，但离当前这句太远时，
+ * 模型对「你是谁」的注意力会掉；放在末尾（bottom / at-depth）能把它拉回来。
+ * role 也可选 user / assistant —— 有些模型对 system 里的「第一人称设定」反应更好。
+ */
+export function placePersona(messages, persona) {
+  const line = personaLines(persona);
+  if (!line) return messages;
+
+  const position = String(persona?.position ?? 'in-prompt');
+  const role = ['system', 'user', 'assistant'].includes(persona?.role)
+    ? persona.role : 'system';
+  const rawDepth = Number(persona?.depth);
+  const depth = Number.isFinite(rawDepth) && rawDepth >= 0 ? Math.floor(rawDepth) : 4;
+
+  // 默认：拼进 system（最省 token，也是原来的行为）
+  if (position === 'in-prompt') {
+    const head = messages[0] ?? { role: 'system', content: '' };
+    return [{ role: 'system', content: `${head.content}\n\n${line}` }, ...messages.slice(1)];
+  }
+
+  if (position === 'top') return [{ role, content: line }, ...messages];
+
+  if (position === 'bottom') {
+    const out = messages.slice();
+    out.splice(Math.max(1, out.length - 1), 0, { role, content: line });
+    return out;
+  }
+
+  // at-depth：从末尾往上数 depth 条。下限 1 —— system 不能被挤到后面去。
+  const at = Math.max(1, messages.length - depth);
+  const out = messages.slice();
+  out.splice(at, 0, { role, content: line });
+  return out;
+}
+
+/**
  * 组装自由对话的 messages。
  * history 里每条记录：said = 玩家当时说的话，text = 当时看到的正文。
  */
@@ -56,7 +102,6 @@ export function buildFreeMessages({
   const system = [
     brief,
     situation,
-    personaLines(persona),
     rules.join('\n'),
     lore,
   ].filter(s => s && String(s).trim()).join('\n\n');
@@ -67,7 +112,9 @@ export function buildFreeMessages({
     if (rec?.text) messages.push({ role: 'assistant', content: String(rec.text) });
   }
   messages.push({ role: 'user', content: String(playerText ?? '') });
-  return messages;
+
+  // 玩家设定最后放 —— 位置由 persona.position 决定
+  return placePersona(messages, persona);
 }
 
 /**

@@ -444,34 +444,45 @@ function startMain(root, opts = {}) {
   shelfHandle.setAttribute('aria-label', '打开书架');
   attachRipple(shelfHandle);
 
-  /* 抽屉的收放用**行内样式**兜底。
-     之前只切 `.ne-body.has-right` 类，窄屏下实测类加上了、选择器也匹配，
-     但抽屉的位移没变（被别处的 transform / 层序吃掉）—— 与其继续跟级联较劲，
-     不如把这一步写死在元素上。 */
-  let shelfOpen = false;
+  /* 书架开合有**两个来源**，必须共用一套状态，否则互相覆盖：
+       · shelfHovered —— 鼠标贴右缘自动唤出（原有交互），离开就收
+       · shelfPinned  —— 点把手显式开关（触屏与新手需要可见入口）
+     踩过的坑：把手曾用独立的 shelfOpen 变量，于是
+       ① 鼠标贴右缘打开的书架在 shelfOpen 眼里仍是「关着」，
+          一碰 resize 或点把手就被关掉；
+       ② 把手不知道书架开着，不会避让，直接压在书上；
+       ③ 非 hover 设备（触屏）默认展开的那句 add('has-right')
+          被随后的 applyShelf() 当场抹掉 —— 书架默认是关的。 */
+  let shelfPinned = false;
+  /* 宽屏默认展开 —— 书是这界面的主要看点，默认藏着（只靠鼠标贴右缘唤出）
+     等于没做。窄屏是覆盖层，默认展开会挡住正文，所以按宽度给初值。 */
+  let shelfHovered = window.innerWidth > 960;
 
-  /* 抽屉位移的唯一来源。窄屏（≤960）抽屉是 fixed 覆盖层，靠 translate 滑进滑出；
-     宽屏是网格列，位移必须清掉。样式表里不再出现 translate —— 见 styles.css 的说明。 */
+  /* 收放的唯一出口。宽屏用网格列（.has-right 切列宽），
+     窄屏用 display 开关（.has-shelf）——
+     位移（translate / transform / right）在这个项目里被合成变换纠缠过，
+     行内 + !important 都压不住；display 没有这些牵扯。 */
   const applyShelf = () => {
     const narrow = window.innerWidth <= 960;
-    // 宽屏：抽屉是网格列，交给 .has-right 切列宽
-    body.classList.toggle('has-right', shelfOpen && !narrow);
-    // 窄屏：抽屉是 fixed 覆盖块，**用 display 开关**。
-    // 位移（translate / transform / right）在这个项目里被合成变换纠缠过，
-    // 行内 + !important 都压不住；display 没有这些牵扯。
-    body.classList.toggle('has-shelf', shelfOpen && narrow);
+    const open = shelfPinned || shelfHovered;
+    body.classList.toggle('has-right', open && !narrow);
+    body.classList.toggle('has-shelf', open && narrow);
+    shelfHandle.classList.toggle('is-open', open);
+    shelfHandle.setAttribute('aria-label', open ? '收起书架' : '打开书架');
   };
 
-  const setShelf = (on) => {
-    shelfOpen = on;
+  shelfHandle.addEventListener('click', () => {
+    shelfPinned = !shelfPinned;
+    // 点开时清掉 hover 态，免得鼠标一移开就被 hover 逻辑收走
+    if (shelfPinned) shelfHovered = false;
     applyShelf();
-    shelfHandle.classList.toggle('is-open', on);
-    shelfHandle.setAttribute('aria-label', on ? '收起书架' : '打开书架');
-    if (on) audio.pageTurn();
-  };
-
-  shelfHandle.addEventListener('click', () => setShelf(!shelfOpen));
-  window.addEventListener('resize', applyShelf);
+    if (shelfPinned) audio.pageTurn();
+  });
+  window.addEventListener('resize', () => {
+    // 变窄时收起（覆盖层会挡住正文），变宽时交给 hover 逻辑
+    if (window.innerWidth <= 960) shelfHovered = false;
+    applyShelf();
+  });
 
   root.appendChild(shelfHandle);
 
@@ -2051,17 +2062,24 @@ function startMain(root, opts = {}) {
         if (pending) return;
         pending = window.requestAnimationFrame(() => {
           pending = 0;
-          const on = body.classList.contains('has-right');
-          if (!on && e.clientX > window.innerWidth - edge) {
-            body.classList.add('has-right');
+          const near = e.clientX > window.innerWidth - edge;
+          const away = e.clientX < window.innerWidth - shelfWidth - 14;
+          // 贴右缘唤出；离开就收 —— 但用把手点开过的保持打开
+          if (near && !shelfHovered && !shelfPinned) {
+            shelfHovered = true;
             audio.hover();
-          } else if (on && e.clientX < window.innerWidth - shelfWidth - 14) {
-            body.classList.remove('has-right');
+            applyShelf();
+          } else if (away && shelfHovered) {
+            shelfHovered = false;
+            applyShelf();
           }
         });
       }, { passive: true });
     } else {
-      body.classList.add('has-right');
+      // 没有 hover 能力的设备：书架默认展开（原先这句 add('has-right')
+      // 会被随后的 applyShelf() 抹掉，等于没写）
+      shelfHovered = true;
+      applyShelf();
     }
   }
 

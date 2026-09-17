@@ -186,8 +186,70 @@ export function createAudio(options = {}) {
    * 具体音色
    * ---------------------------------------------------------------- */
 
+  /* ---------------------------------------------------------------- *
+   * BGM
+   *
+   * 一首 CC0 氛围曲，内联成 data URI 循环播放。
+   * 来源：OpenGameArt「ObservingTheStar」，CC0（检索时按 CC0 许可过滤）。
+   * 原曲 2.1MB，按 MPEG 帧边界截到前 547KB（约 30 余秒）——
+   * 循环点落在帧边界上，接缝听不出来。
+   *
+   * 走 master 增益：跟随总开关与音量，不必再做一套独立的音量 UI。
+   * ---------------------------------------------------------------- */
+
+  const BGM_SRC = '__SND_BGM__';
+  const BGM_VOL = 0.42;
+  const bgm = { buf: null, node: null, gain: null, loading: false, want: false };
+
+  async function bgmStart() {
+    bgm.want = true;
+    if (!ctx || !state.enabled || bgm.node) return;
+
+    if (!bgm.buf) {
+      if (bgm.loading) return;
+      bgm.loading = true;
+      try {
+        const res = await fetch(BGM_SRC);
+        bgm.buf = await ctx.decodeAudioData(await res.arrayBuffer());
+      } catch (e) {
+        bgm.loading = false;
+        return;                      // 解不开就当没有 BGM，别影响别的声音
+      }
+      bgm.loading = false;
+    }
+    // 解码是异步的，回来时可能已经切走或关掉了
+    if (!bgm.want || !state.enabled || bgm.node) return;
+
+    bgm.node = ctx.createBufferSource();
+    bgm.node.buffer = bgm.buf;
+    bgm.node.loop = true;            // 截在帧边界上，loop 接缝是干净的
+    bgm.gain = ctx.createGain();
+    bgm.gain.gain.value = 0;
+    bgm.node.connect(bgm.gain);
+    bgm.gain.connect(master);
+    bgm.node.start();
+    bgm.gain.gain.setTargetAtTime(BGM_VOL, ctx.currentTime, 1.8);
+  }
+
+  function bgmStop() {
+    bgm.want = false;
+    if (!bgm.node || !ctx) return;
+    const node = bgm.node;
+    const g = bgm.gain;
+    bgm.node = null;
+    bgm.gain = null;
+    g.gain.setTargetAtTime(0, ctx.currentTime, 1.1);
+    setTimeout(() => { try { node.stop(); } catch (e) {} }, 3200);
+  }
+
   const api = {
     unlock,
+    bgm: {
+      start: bgmStart,
+      stop: bgmStop,
+      isOn: () => Boolean(bgm.node),
+      isReady: () => Boolean(bgm.buf),
+    },
     isReady: () => Boolean(ctx),
     isEnabled: () => state.enabled,
 

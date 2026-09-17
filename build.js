@@ -151,6 +151,9 @@ const ASSETS = {
   DENY: 'assets/sounds/deny.wav',
   CONFIRM: 'assets/sounds/confirm.wav',
   ENDING: 'assets/sounds/ending.wav',
+  // BGM：OpenGameArt「ObservingTheStar」片段，CC0。
+  // 原曲 2.1MB，这里按 MPEG 帧边界截到前 547KB（约 30 余秒）循环播放。
+  BGM: 'assets/bgm/rain-night.mp3',
 };
 
 /** 图标：Tabler Icons（MIT）单色 SVG → CSS mask，颜色跟随 currentColor */

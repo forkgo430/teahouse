@@ -65,6 +65,15 @@ async function run() {
   try { localStorage.setItem('ne.mode', '${mode}'); } catch {}
   await wait(600);
 
+  /* 关掉过渡再量尺寸。
+     --dump-dom 不渲染帧，CSS transition 推不到终点（.ne-body 的
+     grid-template-columns 有 0.22s 过渡，会一直停在起始值 0）——
+     这是 headless 的伪影，不是产物的毛病。截图能看到书架，就是因为
+     截图要渲染帧。要量最终布局，就得把过渡摘掉。 */
+  const noAnim = document.createElement('style');
+  noAnim.textContent = '* { transition: none !important; animation: none !important; }';
+  document.head.appendChild(noAnim);
+
   // ① 启动页
   need('.scene-boot', '启动页没渲染');
   need('.boot-item', '启动入口没有');
@@ -130,9 +139,80 @@ async function run() {
     need('.ne-modal', '设置面板没弹出');
   } else R.missing.push('.ne-icon-btn 设置');
 
-  // ⑤ 右缘书架
-  const book = q('.book, .ne-book');
-  R.notes.push('书架=' + (book ? '有' : '无'));
+  // ⑤ 右缘书架：打开，检查三本书的几何
+  //    为什么查几何而不是「元素在不在」：书脊的 position 被别的规则抢走过
+  //    （涟漪的 .has-ripple 与它同权重、位置更靠后），书脊于是从
+  //    「左侧贯穿整条」塌成「顶部一小块」—— 元素一个不少，看着却是残的。
+  //    先关掉上一步开着的弹窗，否则遮罩会把点击吃掉，书架压根打不开。
+  for (const b of [...document.querySelectorAll('.ne-modal button')]) {
+    if (b.textContent.trim() === '关闭') b.click();
+  }
+  await wait(400);
+  if (q('.ne-modal')) {
+    // 设置面板没有「关闭」按钮，用 Esc 关（与真人操作一致）
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wait(400);
+  }
+  R.notes.push('弹窗还在=' + !!q('.ne-modal'));
+
+  const handle = q('.shelf-handle');
+  if (!handle) R.missing.push('.shelf-handle（书架没有入口）');
+  else {
+    handle.click();
+    await wait(900);
+
+    const nb = q('.ne-body');
+    const opened = nb && (nb.classList.contains('has-right') || nb.classList.contains('has-shelf'));
+    if (!opened) {
+      R.missing.push('点了把手但书架没打开（.ne-body 上没有 has-right / has-shelf）');
+    }
+    if (nb) {
+      R.notes.push('ne-body列=' + getComputedStyle(nb).gridTemplateColumns);
+      R.notes.push('ne-body类=' + nb.className.replace(/\\s+/g, ','));
+    }
+    const drw = q('.ne-drawer-right');
+    if (drw) R.notes.push('抽屉=' + Math.round(drw.getBoundingClientRect().width) + ' display=' + getComputedStyle(drw).display);
+    R.notes.push('视口=' + innerWidth + 'x' + innerHeight);
+
+    const hcs = getComputedStyle(handle);
+    if (hcs.position !== 'fixed') {
+      R.missing.push('书架把手 position=' + hcs.position + '（应为 fixed，掉进文档流会浮在书本中间）');
+    }
+
+    const books = document.querySelectorAll('.book');
+    R.notes.push('书架=' + books.length + ' 本');
+    if (books.length < 3) R.missing.push('.book 只有 ' + books.length + ' 本（人物 / 世界 / 成就）');
+
+    books.forEach((bk, i) => {
+      const sp = bk.querySelector('.book-spine');
+      if (!sp) { R.missing.push('第 ' + (i + 1) + ' 本书没有书脊'); return; }
+      const cs = getComputedStyle(sp);
+      const sr = sp.getBoundingClientRect();
+      const br = bk.getBoundingClientRect();
+
+      if (cs.position !== 'absolute') {
+        R.missing.push('第 ' + (i + 1) + ' 本书脊 position=' + cs.position + '（应为 absolute）');
+      }
+      // 书脊必须贯穿整本书 —— 这是「彩色布面完整呈现」的量化判据
+      if (Math.abs(sr.height - br.height) > 2) {
+        R.missing.push('第 ' + (i + 1) + ' 本书脊高 ' + Math.round(sr.height) + ' ≠ 书高 ' + Math.round(br.height) + '（没贯穿）');
+      }
+      if (sr.width < 28) R.missing.push('第 ' + (i + 1) + ' 本书脊只有 ' + Math.round(sr.width) + 'px 宽');
+      if (br.width < 100) R.missing.push('第 ' + (i + 1) + ' 本书只有 ' + Math.round(br.width) + 'px 宽');
+
+      // 图标与竖排书名必须上下分开（writing-mode 挂在书脊上会把轴向翻过去）
+      const ic = sp.querySelector('.ic') || sp.querySelector('i');
+      const tx = sp.querySelector('span');
+      if (ic && tx) {
+        const a = ic.getBoundingClientRect();
+        const b = tx.getBoundingClientRect();
+        const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (overlap > 0) {
+          R.missing.push('第 ' + (i + 1) + ' 本书脊的图标与书名重叠 ' + Math.round(overlap) + 'px');
+        }
+      }
+    });
+  }
 } catch (err) {
   R.errors.push('probe 自身出错：' + err.message);
 } finally {

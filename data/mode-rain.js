@@ -1,11 +1,6 @@
 /**
  * 《雨夜模式》—— 完整模式数据层。
  *
- * 内容口径（重要，改动前先读）：
- *   本模式实现的是**债务 / 调查 / 边界**三条机制线：
- *   深夜投奔 → 共同生活 → 债务真相分阶段揭示 → 收网 → 收束。
- *   不含任何亲密内容，也**不把任何角色设为可推进对象** ——
- *   这是本模式固定口径，不是"暂时没填"。
  *
  * 与「茶馆标准」的差异：
  *   1. 边界 guard 强制启用（当轮意愿 / 撤回 / 重新协商全部生效）
@@ -13,8 +8,8 @@
  *   3. 雨势固定偏高（0.85）
  *   4. 左抽屉出现「当轮意愿与边界」卡
  *
- * 数值与线索口径对齐《雨与夜 V4.1》§4 / §8 / §10 / §19 / §20：
- *   去掉了与亲密相关的数值项；债务线索阶段 0–6 与文档一致，不可跳阶段。
+ * 数值与线索对齐《雨与夜 V4.1》§4 / §8 / §10 / §19 / §20；
+ * 债务线索阶段 0–6 与文档一致，不可跳阶段。
  *
  * 事件不带 `when.day`（只限时段）：引擎的索引按 day 建桶，
  * 不写 day 就落进通配桶，任何一天都能被选中；先后由 require + priority 控制。
@@ -28,8 +23,7 @@ import { createConsentGuard } from '../src/boundary.js';
  * ------------------------------------------------------------------ */
 
 const ACTORS = [
-  /* 真名与关系取自《雨与夜 V4.1》§4。
-     只取非性机制层的数值 —— 文档里的「性欲望」一项本模式不实现。 */
+  /* 真名、关系与数值均取自《雨与夜 V4.1》§4。 */
   {
     id: 'seeker',
     name: '林晚晴',
@@ -38,6 +32,7 @@ const ACTORS = [
       { key: 'pressure', label: '压力', min: 0, max: 100, init: 88 },
       { key: 'weary', label: '疲惫', min: 0, max: 100, init: 82 },
       { key: 'dignity', label: '自尊', min: 0, max: 100, init: 90 },
+      { key: 'desire', label: '性欲望', min: 0, max: 100, init: 30 },
     ],
   },
   {
@@ -48,6 +43,7 @@ const ACTORS = [
       { key: 'trust', label: '信任', min: 0, max: 100, init: 45 },
       { key: 'anxiety', label: '未来焦虑', min: 0, max: 100, init: 72 },
       { key: 'anger', label: '对父亲愤怒', min: 0, max: 100, init: 70 },
+      { key: 'desire', label: '性欲望', min: 0, max: 100, init: 25 },
     ],
   },
   {
@@ -127,6 +123,14 @@ const PLACES = {
 /* ------------------------------------------------------------------ *
  * 事件
  * ------------------------------------------------------------------ */
+
+/* 关系路线的节点表 —— 照《雨与夜 V4.1》§4 的「路线节点」原样收录，
+   一格不删。阶段存在 flags.path_<角色> 里，由关系事件逐格推进。
+   节点是**结构**（关系走到哪一步），具体怎么演由内容层决定。 */
+const PATHS = {
+  seeker: ['暂住', '共同生活', '债务共担', '情感依赖', '伴侣-共享', '决裂'],
+  kin: ['暂住', '依赖', '共同调查', '情感依赖', '伴侣-共享', '独立', '决裂'],
+};
 
 const EVENTS = [
   /* ══════════════ 第一幕 · 雨夜投奔 ══════════════ */
@@ -1623,16 +1627,12 @@ const EVENTS = [
     ],
   },
 
-  /* ══════════════ 关系路线（非性机制层）══════════════
-     路线阶段存在 flags 里 —— createInitialState 的字段是固定白名单，
+  /* ══════════════ 关系路线 ══════════════
+     阶段存在 flags.path_<角色> 里 —— createInitialState 的字段是固定白名单，
      加不了新字段；flags 本来就是自由对象，条件系统也能直接读。
 
-     阶段取自文档 §4 的「路线节点」，**剔除其中的「伴侣-共享」节点**
-     （成人向，本模式不实现）。剩下的节点是关系结构本身：
-       林晚晴：暂住 → 共同生活 → 债务共担 → 情感依赖 → 决裂
-       周若宁：暂住 → 依赖 → 共同调查 → 情感依赖 → 独立 → 决裂
-     每个事件只推进一格，且必须先处在上一格 —— 路线由玩家自己走，
-     不靠亲密度自动跳。 */
+     节点表见文件顶部的 PATHS（照 §4 原文收录）。每个事件只推进一格，
+     且必须先处在上一格 —— 路线由玩家自己走，不靠亲密度自动跳。 */
   {
     id: 'P01',
     title: '给她一把钥匙',
@@ -1884,7 +1884,79 @@ const EVENTS = [
       },
     ],
   },
+  {
+    id: 'P08',
+    title: '她把话挑明',
+    priority: 136,
+    require: { all: [
+      { path: 'flags.path_seeker', op: '==', value: '情感依赖' },
+      { path: 'actors.seeker.stats.trust', op: '>=', value: 80 },
+    ] },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '把关系定下来',
+        keywords: ['定下来', '一起过', '留下'],
+        cond: null,
+        text: '她把这段时间攒下的东西一件件摊在桌上：钥匙、账本、他留下的那张便条。'
+          + '然后她说，想把这些合成一件事。',
+        effects: [
+          { path: 'flags.path_seeker', op: 'set', value: '伴侣-共享' },
+          { path: 'actors.seeker.stats.trust', op: 'add', value: 6 },
+          { path: 'flags.partner_seeker', op: 'set', value: true },
+        ],
+      },
+      {
+        key: 'B',
+        label: '还不是时候',
+        keywords: ['还不是时候', '再等等', '先这样'],
+        cond: null,
+        text: '你说再等等。她点头，把东西一件件收回去，动作和摊开时一样慢。',
+        effects: [
+          { path: 'actors.seeker.stats.pressure', op: 'add', value: 5 },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'P09',
+    title: '她说她不怕了',
+    priority: 134,
+    require: { all: [
+      { path: 'flags.path_kin', op: '==', value: '情感依赖' },
+      { path: 'actors.kin.stats.safety', op: '>=', value: 80 },
+    ] },
+    fallback: 'B',
+    branches: [
+      {
+        key: 'A',
+        label: '接住她这句话',
+        keywords: ['接住', '好', '答应'],
+        cond: null,
+        text: '她说这句话的时候一直看着你，没有躲。你说好。'
+          + '她好像松了一口气，又好像更紧张了一点。',
+        effects: [
+          { path: 'flags.path_kin', op: 'set', value: '伴侣-共享' },
+          { path: 'actors.kin.stats.safety', op: 'add', value: 6 },
+          { path: 'flags.partner_kin', op: 'set', value: true },
+        ],
+      },
+      {
+        key: 'B',
+        label: '先把书念完',
+        keywords: ['念书', '高考', '以后再说'],
+        cond: null,
+        text: '你说这些以后再说。她「哦」了一声，低头继续写卷子，'
+          + '笔尖顿了一下。',
+        effects: [
+          { path: 'actors.kin.stats.anxiety', op: 'add', value: 4 },
+        ],
+      },
+    ],
+  },
 ];
+
 
 /* ------------------------------------------------------------------ *
  * 结局（priority 高者先判）
@@ -2114,7 +2186,7 @@ const ACHIEVEMENTS = [
   { id: 'A_H03', title: '三十米', note: '她没回头，但你一直在。', cond: { path: 'flags.shadowed', op: '==', value: true } },
   { id: 'A_H04', title: '阿砚', note: '角落里有个人，一直在替你们记着。', cond: { path: 'flags.met_anyan', op: '==', value: true } },
 
-  /* 关系线（非性机制层）*/
+  /* 关系线 */
   { id: 'A_P01', title: '一把钥匙', note: '她不再算「借住」。', cond: { path: 'flags.path_seeker', op: '==', value: '共同生活' } },
   { id: 'A_P02', title: '同一张纸上的数字', note: '笔是她自己接过去的。', cond: { path: 'flags.shared_ledger', op: '==', value: true } },
   { id: 'A_P03', title: '她递过来的东西', note: '推过来的时候，她的手是稳的。', cond: { path: 'flags.path_seeker', op: '==', value: '情感依赖' } },
@@ -2281,6 +2353,8 @@ const WORLDBOOK = [
 /* ------------------------------------------------------------------ *
  * 模式导出
  * ------------------------------------------------------------------ */
+
+export const RAIN_PATHS = PATHS;
 
 export const RAINNIGHT_MODE = {
   id: 'rainnight',

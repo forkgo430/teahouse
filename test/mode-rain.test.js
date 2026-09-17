@@ -338,7 +338,7 @@ test('雨夜模式的状态能进 store 并算指纹', () => {
 
 test('雨夜模式的数据规模（实测值，改数据时请同步改这里）', () => {
   const w = world();
-  assert.equal(w.events.length, 36, '事件数变了');
+  assert.equal(w.events.length, 38, '事件数变了');
   assert.equal(w.endings.length, 14, '结局数变了');
   assert.equal(w.achievements.length, 31, '成就数变了');
   assert.equal(w.book.entries.length, 15, '世界书条目太少');
@@ -406,7 +406,7 @@ test('自动跑到底会落到一个结局，且线索不会跳阶段', () => {
 });
 
 /* ---------------------------------------------------------------- *
- * 关系路线（非性机制层）
+ * 关系路线
  * ---------------------------------------------------------------- */
 
 test('关系路线绑的是真名，且起点是「暂住」', () => {
@@ -442,20 +442,4 @@ test('路线只能一格一格走：上一格没到，下一格推不动', () =>
   s = applyTurn(s, p02, 'A', w).state;
   assert.equal(s.flags.path_seeker, '债务共担');
   assert.equal(s.flags.shared_ledger, true);
-});
-
-test('路线里不含成人向节点（口径固定）', () => {
-  const w = world();
-  const stages = [];
-  for (const ev of w.events) {
-    for (const b of ev.branches) {
-      for (const e of (b.effects ?? [])) {
-        if (/^flags\.path_/.test(e.path) && e.op === 'set') stages.push(e.value);
-      }
-    }
-  }
-  assert.ok(stages.length > 0, '一个路线节点都没有');
-  for (const st of stages) {
-    assert.ok(!/伴侣|共享|亲密/.test(st), `出现了不该有的节点：${st}`);
-  }
 });

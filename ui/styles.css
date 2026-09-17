@@ -1613,6 +1613,9 @@
     .ne-body.has-left .ne-drawer-left { display: block; }
     .ne-body.has-shelf .ne-drawer-right { display: block; }
 
+    /* 窄屏书架是 288px / 82vw 的覆盖层，把手跟着它的左缘走 */
+    .shelf-handle.is-open { right: calc(min(288px, 82vw) + 12px); }
+
     .ne-stream,
     .ne-composer-inner { padding-inline: 18px; }
 
@@ -2077,9 +2080,17 @@
     position: absolute;
     inset: 0 auto 0 0;
     z-index: 3;
-    width: 34px;
-    display: grid;
-    place-items: center;
+    width: 38px;
+    /* 书脊本身保持 horizontal-tb —— 只在文字上开竖排。
+       踩过的坑：把 writing-mode: vertical-rl 挂在书脊上，grid / flex 的
+       轴线会跟着翻转（column 变成横向、grid 的行变成列），
+       图标与竖排书名于是被塞进同一行，在 38px 里叠成一团。
+       竖排是**文字**的属性，不是容器的属性。 */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
     cursor: pointer;
     border-right: 1px solid rgba(0, 0, 0, 0.35);
     /* 布面/皮革书脊：左暗右亮，中间一条压槽 */
@@ -2103,8 +2114,6 @@
     letter-spacing: 0.22em;
     color: var(--spine-ink);
     text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 8px color-mix(in srgb, var(--tone, var(--accent)) 55%, transparent);
-    writing-mode: vertical-rl;
-    text-orientation: upright;
     user-select: none;
     transition: filter var(--dur);
   }
@@ -2123,13 +2132,19 @@
   .book-spine::before { top: 9px; }
   .book-spine::after { bottom: 9px; }
 
+  /* 竖排只加在书名上 */
+  .book-spine > span {
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
+
   .book-spine:hover { filter: brightness(1.12); }
 
   /* 内页：转轴在左缘（贴着书脊），合上时转出去 */
   .book-body {
     position: relative;
     min-width: 0;
-    padding: 14px 14px 15px 46px;
+    padding: 14px 14px 15px 50px;
     transform-origin: left center;
     transform-style: preserve-3d;
     /* 纸纹只留横向一组。两组（横+竖）在窄屏上会读成方格纸，不是纸 */
@@ -2199,8 +2214,16 @@
      surface 是一层裁切罩（跟着元素的圆角走），dot 是那一颗圆。
      颜色用 currentColor，两套主题不用各写一份。
      软边：radial-gradient(closest-side, ... max(calc(100% - 34px), 62%) ...)
-     —— 与 Material Web 同一手法，让涟漪边缘化开而不是一刀切。 */
-  .has-ripple { position: relative; overflow: hidden; }
+     —— 与 Material Web 同一手法，让涟漪边缘化开而不是一刀切。
+
+     ⚠️ 用 :where() 把优先级压到 0 —— 这里的 position 只是「给涟漪找个
+     定位上下文」的兜底，绝不能抢元素自己的定位。
+     踩过的坑：这条原先是 .has-ripple，与 .book-spine / .shelf-handle
+     同层同权重、位置更靠后，于是两处都被改成了 relative ——
+       书脊（本该 absolute 贯穿左侧）塌成顶部一个方块，彩图没了；
+       书架把手（本该 fixed 贴右缘）掉进文档流，浮在书本中间。
+     一个 position 惹的两个症状。 */
+  :where(.has-ripple) { position: relative; overflow: hidden; }
 
   .ripple-surface {
     position: absolute;
@@ -2290,6 +2313,10 @@
     border-color: var(--line-gold);
     box-shadow: var(--glow-gold);
   }
+
+  /* 书架打开时，把手挪到书架左缘外面 —— 它此刻的职责是「收起书架」，
+     停在书架里会压住书本内容。宽度跟着实际列宽走。 */
+  .shelf-handle.is-open { right: 336px; }
 
 
 
@@ -2565,10 +2592,11 @@
 
 /* ── 图标细节：书脊 / boot / 导入分区 ─────────────────────── */
 
+/* 触屏：书脊再宽一点，指头好按，彩面也更醒目 */
 .book-spine {
-  flex-direction: column;
-  gap: 9px;
-  padding: 12px 0;
+  width: 42px;
+  gap: 11px;
+  padding: 14px 0;
 }
 
 .book-spine .ic { width: 14px; height: 14px; opacity: 0.9; }

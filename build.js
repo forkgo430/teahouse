@@ -152,6 +152,12 @@ const ASSETS = {
   DENY: 'assets/sounds/deny.wav',
   CONFIRM: 'assets/sounds/confirm.wav',
   ENDING: 'assets/sounds/ending.wav',
+  // 以下 5 个补自 Kenney Interface Sounds 完整包（CC0，经 Calinou/kenney-interface-sounds 打包）
+  BACK: 'assets/sounds/back.wav',
+  CLOSE: 'assets/sounds/close.wav',
+  SELECT: 'assets/sounds/select.wav',
+  BONG: 'assets/sounds/bong.wav',
+  DROP: 'assets/sounds/drop.wav',
   // BGM：OpenGameArt「ObservingTheStar」片段，CC0。
   // 原曲 2.1MB，这里按 MPEG 帧边界截到前 547KB（约 30 余秒）循环播放。
   BGM: 'assets/bgm/rain-night.mp3',

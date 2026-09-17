@@ -36,6 +36,11 @@ import { createAudio } from './audio.js';
 
 const SWIPE_KEY = 'ne.swipe.count';
 const SOUND_KEY = 'ne.sound.on';
+const BGM_KEY = 'ne.bgm.on';
+const VOL_KEY = 'ne.volume';
+/* 雨夜模式自带的「当轮意愿与边界」机制。有人只想走剧情、不想被闸门卡，
+   所以给它一个开关 —— 关掉是"不过这道闸"，不是"把机制从数据里删掉"。 */
+const BOUNDARY_KEY = 'ne.mech.boundary';
 
 function readSoundOn() {
   try {
@@ -52,6 +57,31 @@ function writeSoundOn(on) {
   } catch {
     /* 只用在本轮 */
   }
+}
+
+function readBgmOn() {
+  try { return storage?.getItem(BGM_KEY) !== '0'; } catch { return true; }
+}
+function writeBgmOn(on) {
+  try { storage?.setItem(BGM_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
+}
+
+function readVolume() {
+  try {
+    const v = Number(storage?.getItem(VOL_KEY));
+    return Number.isFinite(v) && v > 0 ? v : 0.45;
+  } catch { return 0.45; }
+}
+function writeVolume(v) {
+  try { storage?.setItem(VOL_KEY, String(v)); } catch { /* 忽略 */ }
+}
+
+/** 雨夜的边界机制是否启用（默认开） */
+function readBoundary() {
+  try { return storage?.getItem(BOUNDARY_KEY) !== '0'; } catch { return true; }
+}
+function writeBoundary(on) {
+  try { storage?.setItem(BOUNDARY_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
 }
 
 function readSwipeCount() {
@@ -378,7 +408,167 @@ function initialStateFor(mode) {
  * 入口：先给启动页，选完路线再进主界面。
  * 主界面本体在 startMain —— 那里才是原来 mount 的全部内容。
  */
+/* ---------------------------------------------------------------- *
+ * 右抽屉：书架（人物书 / 世界书 / 成就）
+ * ---------------------------------------------------------------- */
+
+/* 涟漪参数，照 Material Web 的那套来（下面注释里写了出处） */
+const RIPPLE = {
+  originScale: 0.6,   // 起始圆 = 长边 × 0.6
+  softEdge: 0.35,     // 软边下限，避免小元素上涟漪硬得像块饼
+  softMin: 24,
+  growMs: 450,
+  fadeMs: 375,
+};
+
+/**
+ * 涟漪。
+ *
+ * 算法参考 material-components/material-web（Apache-2.0）的 ripple 组件，
+ * 按本项目的零依赖写法重写，未逐行复制其源码。要点三个：
+ *   1. 最大半径取**对角线**（√(w²+h²)）而不是长边 —— 否则方角处扩不满；
+ *   2. 起始圆不大，靠 `scale()` 放大到位 —— 动 transform 比动 width/height 便宜；
+ *   3. 位移从**按下点**走到**元素中心**，所以涟漪是"被按出来的"，不是居中播放。
+ * 松手后单独一段淡出（375ms linear），不跟扩散共用一条缓动。
+ */
+/**
+ * 在 node 的 (clientX, clientY) 处按下一圈水纹。
+ *
+ * 算法取自 material-components/material-web（Apache-2.0）的 ripple，
+ * 按零依赖重写：半径取**对角线**（取长边的话方角处扩不满）、
+ * 起始圆只有长边的 0.6 倍、靠 scale() 放大（动 transform 比动宽高便宜）、
+ * 位移从**按下点**走到**元素中心** —— 涟漪是"被按出来的"，不是居中播放。
+ *
+ * 委托层与手动挂载共用这一个出口，别再写第二份。
+ */
+function spawnRipple(node, clientX, clientY) {
+  let surface = node.querySelector(':scope > .ripple-surface');
+  if (!surface) {
+    node.classList.add('has-ripple');
+    surface = el('span', 'ripple-surface');
+    node.appendChild(surface);
+  }
+
+  const box = node.getBoundingClientRect();
+  const w = box.width || 1;
+  const h = box.height || 1;
+
+  const maxDim = Math.max(w, h);
+  const soft = Math.max(RIPPLE.softEdge * maxDim, RIPPLE.softMin);
+  const initial = Math.max(1, Math.floor(maxDim * RIPPLE.originScale));
+  const maxRadius = Math.sqrt(w * w + h * h) + 10;
+  const scale = (maxRadius + soft) / initial;
+
+  const fromX = clientX - box.left - initial / 2;
+  const fromY = clientY - box.top - initial / 2;
+  const toX = w / 2 - initial / 2;   // 收到元素中心
+  const toY = h / 2 - initial / 2;
+
+  const dot = el('span', 'ripple-dot');
+  dot.style.width = `${initial}px`;
+  dot.style.height = `${initial}px`;
+  dot.style.transform = `translate(${fromX}px, ${fromY}px) scale(1)`;
+  surface.appendChild(dot);
+
+  const release = () => {
+    const fade = dot.animate(
+      [{ opacity: dot.style.opacity || 0.26 }, { opacity: 0 }],
+      { duration: RIPPLE.fadeMs, easing: 'linear', fill: 'forwards' },
+    );
+    fade.onfinish = () => dot.remove();
+    fade.oncancel = () => dot.remove();
+  };
+
+  const grow = dot.animate(
+    [
+      { transform: `translate(${fromX}px, ${fromY}px) scale(1)` },
+      { transform: `translate(${toX}px, ${toY}px) scale(${scale})` },
+    ],
+    { duration: RIPPLE.growMs, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' },
+  );
+
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    release();
+  };
+  grow.onfinish = finish;
+  // 松手就淡出，不等扩散走完 —— 按一下松得快，涟漪也该收得快
+  node.addEventListener('pointerup', finish, { once: true });
+  node.addEventListener('pointercancel', finish, { once: true });
+  node.addEventListener('pointerleave', finish, { once: true });
+}
+
+/** 给单个元素挂上涟漪（书脊、把手这类"手动挂"的地方用） */
+function attachRipple(node) {
+  node.classList.add('has-ripple');
+  if (!node.querySelector(':scope > .ripple-surface')) {
+    node.appendChild(el('span', 'ripple-surface'));
+  }
+  node.addEventListener('pointerdown', (e) => spawnRipple(node, e.clientX, e.clientY));
+}
+
+/**
+ * 全站的音效与点击反馈 —— 一个来源，靠事件委托。
+ *
+ * 为什么用委托而不是逐个挂：界面里有 40 多个按钮，散在启动页、设置面板、
+ * 导入向导、书架、选项流里；逐个 attach 一漏就是一片哑的（之前就是这样，
+ * 一半按钮没声音），而且后建的按钮还会漏。挂在 document 上，
+ * **后建的按钮自动就有**，不用管渲染顺序。
+ *
+ * 音色由元素自己声明：`data-sfx="back|closePanel|select|bong|pageTurn|swap|confirm|deny|dropped"`，
+ * 不写就是通用的 pick。这样"这个是返回"「这个是关闭」由写按钮的人决定，
+ * 委托层只负责发声时机。
+ */
+let uiFeedbackInstalled = false;
+function installUiFeedback() {
+  if (uiFeedbackInstalled) return;
+  uiFeedbackInstalled = true;
+
+  const CLICKABLE = 'button, [role="button"], .book-spine, .book-tab, .ne-actor';
+  const canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
+  let lastHover = null;
+  let lastHoverAt = 0;
+
+  document.addEventListener('pointerover', (e) => {
+    if (!canHover) return;                 // 触屏没有悬停这回事
+    const node = e.target.closest?.(CLICKABLE);
+    if (!node || node === lastHover || node.disabled) return;
+    lastHover = node;
+    // 密集列表里划过会连成一片 —— 90ms 内只响一次
+    const now = performance.now();
+    if (now - lastHoverAt < 90) return;
+    lastHoverAt = now;
+    audio.hover();
+  });
+
+  document.addEventListener('pointerdown', (e) => {
+    // 只在主键上出声，右键菜单不该响
+    if (e.button !== undefined && e.button !== 0) return;
+    const node = e.target.closest?.(CLICKABLE);
+    if (!node || node.disabled) return;
+
+    spawnRipple(node, e.clientX, e.clientY);
+
+    const kind = node.dataset?.sfx || 'pick';
+    const fn = typeof audio[kind] === 'function' ? audio[kind] : audio.pick;
+    fn.call(audio);
+  });
+}
+
 export function mount(root) {
+  installUiFeedback();
+
+  /* 音频设置必须在这里读，不能写在模块顶层。
+     顶层调 readSoundOn 时 storage 还没初始化（它定义在文件更下面），
+     而 `storage?.` 在 TDZ 里是**抛错**不是 undefined —— 异常被 catch 吃掉，
+     于是开关永远读回默认值：关掉音效、刷新页面又自己开了。
+     这个 bug 从加音效开关那天起就在，只是没人刷新过。 */
+  audio.setEnabled(readSoundOn());
+  audio.setBgmEnabled(readBgmOn());
+  audio.setVolume(readVolume());
+
   renderBoot(root);
 }
 
@@ -388,6 +578,9 @@ function startMain(root, opts = {}) {
   // 从向导进来、或启动后才切模式时，类就漏了 —— 结果雨夜模式顶着浅色主题跑。
   document.body.classList.toggle('mode-rainnight', mode === 'rainnight');
   const world = createWorldFor(mode);
+  /* 边界机制关掉时不挂闸门 —— 这是玩家的开关，不是改数据：
+     世界定义里的 guards 原样保留，只是这一局不启用。 */
+  if (!readBoundary()) world.guards = [];
   const store = createStore(initialStateFor(mode));
   const SAVE_KEY = saveKeyFor(mode);
 
@@ -511,6 +704,7 @@ function startMain(root, opts = {}) {
   const btnSide = iconBtn('状态', 'users');
   const btnImport = iconBtn('导入', 'book');
   const btnGear = iconBtn('设置', 'settings');
+  btnGear.dataset.sfx = 'toggle';        // 面板开合音
 
   topbar.append(brand, spacer, btnSide, btnImport, btnGear);
 
@@ -518,6 +712,7 @@ function startMain(root, opts = {}) {
      原本书架只能靠"鼠标贴到右缘"唤出，没有可见入口 —— 触屏与新手都摸不到。 */
   const shelfHandle = el('button', 'shelf-handle');
   shelfHandle.type = 'button';
+  shelfHandle.dataset.sfx = 'pageTurn';  // 收放书架用翻页音
   shelfHandle.appendChild(el('i', 'ic ic-book'));
   shelfHandle.appendChild(el('span', 'shelf-handle-label', '书架'));
   shelfHandle.setAttribute('aria-label', '打开书架');
@@ -555,7 +750,6 @@ function startMain(root, opts = {}) {
     // 点开时清掉 hover 态，免得鼠标一移开就被 hover 逻辑收走
     if (shelfPinned) shelfHovered = false;
     applyShelf();
-    if (shelfPinned) audio.pageTurn();
   });
   window.addEventListener('resize', () => {
     // 变窄时收起（覆盖层会挡住正文），变宽时交给 hover 逻辑
@@ -766,7 +960,6 @@ function startMain(root, opts = {}) {
 
     const { state: next } = applyEffects(state, selectVariantEffects(turnIndex, step.index, step.text));
     store.commit(next);
-    audio.swap();
 
     const node = stream.querySelector(`[data-turn="${record.turn}"]`);
     if (!node) return;
@@ -923,7 +1116,6 @@ function startMain(root, opts = {}) {
         ? renegotiateEffects(cur, actorId)
         : consentEffects(cur, actorId, value);
     store.dispatch(effects);
-    audio.pick();
     render();
     appendSystem(
       value === CONSENT.UNSPOKEN
@@ -1000,7 +1192,7 @@ function startMain(root, opts = {}) {
     drawerLeft.appendChild(s2);
 
     // 雨夜专属：当轮意愿与边界。样式一直在，渲染一直没写 —— 现在补上。
-    if (mode === 'rainnight') drawerLeft.appendChild(consentSection(view));
+    if (mode === 'rainnight' && readBoundary()) drawerLeft.appendChild(consentSection(view));
 
     const s3 = el('section', 'ne-sec');
     s3.appendChild(el('h3', 'ne-sec-title', `线索 · ${view.clues.length}`));
@@ -1028,85 +1220,6 @@ function startMain(root, opts = {}) {
     drawerLeft.appendChild(s4);
   }
 
-  /* ---------------------------------------------------------------- *
-   * 右抽屉：书架（人物书 / 世界书 / 成就）
-   * ---------------------------------------------------------------- */
-
-  /* 涟漪参数，照 Material Web 的那套来（下面注释里写了出处） */
-  const RIPPLE = {
-    originScale: 0.6,   // 起始圆 = 长边 × 0.6
-    softEdge: 0.35,     // 软边下限，避免小元素上涟漪硬得像块饼
-    softMin: 24,
-    growMs: 450,
-    fadeMs: 375,
-  };
-
-  /**
-   * 涟漪。
-   *
-   * 算法参考 material-components/material-web（Apache-2.0）的 ripple 组件，
-   * 按本项目的零依赖写法重写，未逐行复制其源码。要点三个：
-   *   1. 最大半径取**对角线**（√(w²+h²)）而不是长边 —— 否则方角处扩不满；
-   *   2. 起始圆不大，靠 `scale()` 放大到位 —— 动 transform 比动 width/height 便宜；
-   *   3. 位移从**按下点**走到**元素中心**，所以涟漪是"被按出来的"，不是居中播放。
-   * 松手后单独一段淡出（375ms linear），不跟扩散共用一条缓动。
-   */
-  function attachRipple(node) {
-    node.classList.add('has-ripple');
-    const surface = el('span', 'ripple-surface');
-    node.appendChild(surface);
-
-    const release = (dot) => {
-      const fade = dot.animate(
-        [{ opacity: 1 }, { opacity: 0 }],
-        { duration: RIPPLE.fadeMs, easing: 'linear', fill: 'forwards' },
-      );
-      fade.onfinish = () => dot.remove();
-      fade.oncancel = () => dot.remove();
-    };
-
-    node.addEventListener('pointerdown', (e) => {
-      const box = node.getBoundingClientRect();
-      const w = box.width || 1;
-      const h = box.height || 1;
-
-      const maxDim = Math.max(w, h);
-      const soft = Math.max(RIPPLE.softEdge * maxDim, RIPPLE.softMin);
-      const initial = Math.max(1, Math.floor(maxDim * RIPPLE.originScale));
-      const maxRadius = Math.sqrt(w * w + h * h) + 10;
-      const scale = (maxRadius + soft) / initial;
-
-      const fromX = e.clientX - box.left - initial / 2;
-      const fromY = e.clientY - box.top - initial / 2;
-      const toX = w / 2 - initial / 2;
-      const toY = h / 2 - initial / 2;
-
-      const dot = el('span', 'ripple-dot');
-      dot.style.width = `${initial}px`;
-      dot.style.height = `${initial}px`;
-      dot.style.transform = `translate(${fromX}px, ${fromY}px) scale(1)`;
-      surface.appendChild(dot);
-
-      const grow = dot.animate(
-        [
-          { transform: `translate(${fromX}px, ${fromY}px) scale(1)` },
-          { transform: `translate(${toX}px, ${toY}px) scale(${scale})` },
-        ],
-        { duration: RIPPLE.growMs, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' },
-      );
-
-      let done = false;
-      const finish = () => {
-        if (done) return;
-        done = true;
-        release(dot);
-      };
-      grow.onfinish = finish;
-      node.addEventListener('pointerup', finish, { once: true });
-      node.addEventListener('pointercancel', finish, { once: true });
-      node.addEventListener('pointerleave', finish, { once: true });
-    });
-  }
 
   /**
    * 点击书脊翻页开合。
@@ -1126,11 +1239,11 @@ function startMain(root, opts = {}) {
     const flip = () => {
       bookEl.classList.toggle('is-closed');
       sync();
-      audio.pageTurn();
     };
 
     spine.setAttribute('role', 'button');
     spine.setAttribute('tabindex', '0');
+    spine.dataset.sfx = 'pageTurn';      // 翻书 = 翻页音
     sync();
     attachRipple(spine);
     spine.addEventListener('click', flip);
@@ -1198,6 +1311,7 @@ function startMain(root, opts = {}) {
         // 标题可点 —— 展开编辑（原先世界书只能整份导，导错了没处改）
         const title = el('button', 'book-entry-title', e.heading ?? e.id);
         title.type = 'button';
+        title.dataset.sfx = 'toggle';    // 展开编辑面板
         title.title = '点一下改这条';
         entry.appendChild(title);
 
@@ -1206,11 +1320,11 @@ function startMain(root, opts = {}) {
 
         const del = el('button', 'book-entry-del', '×');
         del.type = 'button';
+        del.dataset.sfx = 'deny';        // 删除是破坏性的，给个下行音
         del.title = `删掉这条：${e.heading ?? e.id}`;
         del.addEventListener('click', (ev) => {
           ev.stopPropagation();
           world.book = createWorldbook(removeEntry(world.book?.entries ?? [], e.id));
-          audio.toggle(false);
           appendSystem(`已删除世界书条目「${e.heading ?? e.id}」`, 'warn');
           render();
         });
@@ -1262,6 +1376,7 @@ function startMain(root, opts = {}) {
           const acts = el('div', 'ne-modal-actions');
           const ok = el('button', 'ne-btn ne-btn-primary', '保存');
           ok.type = 'button';
+          ok.dataset.sfx = 'confirm';
           ok.addEventListener('click', () => {
             const keys = kIn.value.split(/[,，\s]+/).map(x => x.trim()).filter(Boolean);
             try {
@@ -1273,7 +1388,6 @@ function startMain(root, opts = {}) {
                 // 否则这条永远等不到触发
                 constant: constOn || keys.length === 0,
               }));
-              audio.pick();
               appendSystem(`已保存世界书条目「${hIn.value.trim() || e.id}」`, 'good');
               render();
             } catch (err) {
@@ -1287,7 +1401,6 @@ function startMain(root, opts = {}) {
 
           box.append(hRow, kRow, cRow, cBtn, acts);
           entry.after(box);
-          audio.toggle(true);
         });
       }
     }
@@ -1295,10 +1408,10 @@ function startMain(root, opts = {}) {
     for (const c of cats) {
       const tab = el('button', `book-tab${c === activeCat ? ' is-on' : ''}`, c);
       tab.type = 'button';
+      tab.dataset.sfx = 'select';      // 换分类是选择，不是翻页
       tab.addEventListener('click', () => {
         activeCat = c;
         tabs.querySelectorAll('.book-tab').forEach(x => x.classList.toggle('is-on', x.textContent === c));
-        audio.pageTurn();
         renderLore();
       });
       tabs.appendChild(tab);
@@ -1431,6 +1544,7 @@ function startMain(root, opts = {}) {
         if (!entry.locked) {
           const del = el('button', 'ne-btn stack-del', '删除');
           del.type = 'button';
+          del.dataset.sfx = 'deny';
           del.addEventListener('click', () => {
             promptStack = promptStack.filter(x => x.id !== entry.id);
             saveStack();
@@ -1500,6 +1614,7 @@ function startMain(root, opts = {}) {
         });
         const del = el('button', 'ne-btn', '删');
         del.type = 'button';
+        del.dataset.sfx = 'deny';
         del.addEventListener('click', () => {
           regexRules = regexRules.filter(r => r.id !== rule.id);
           saveRx();
@@ -1615,16 +1730,83 @@ function startMain(root, opts = {}) {
     sndRow.appendChild(el('span', 'ne-field-label', '音效'));
     const sndBtn = el('button', 'ne-btn', audio.isEnabled() ? '已开启' : '已关闭');
     sndBtn.type = 'button';
+    sndBtn.dataset.sfx = 'confirm';
     sndBtn.addEventListener('click', () => {
       const next = !audio.isEnabled();
       audio.setEnabled(next);
       writeSoundOn(next);
       if (next) ensureAudio();
       sndBtn.textContent = next ? '已开启' : '已关闭';
-      if (next) audio.confirm();
     });
     sndRow.appendChild(sndBtn);
     sec.appendChild(sndRow);
+
+    /* 背景音乐 —— 跟音效分开的独立开关 */
+    const bgmRow = el('div', 'ne-field');
+    bgmRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;';
+    bgmRow.appendChild(el('span', 'ne-field-label', '背景音乐'));
+    const bgmBtn = el('button', 'ne-btn', audio.isBgmEnabled() ? '已开启' : '已关闭');
+    bgmBtn.type = 'button';
+    bgmBtn.dataset.sfx = 'confirm';
+    bgmBtn.addEventListener('click', () => {
+      const next = !audio.isBgmEnabled();
+      audio.setBgmEnabled(next);
+      writeBgmOn(next);
+      if (next && !audio.isEnabled()) {
+        appendSystem('音效总开关是关着的 —— 音乐也听不到，先把音效打开', 'warn');
+      }
+      bgmBtn.textContent = next ? '已开启' : '已关闭';
+      audio.select();
+    });
+    bgmRow.appendChild(bgmBtn);
+    sec.appendChild(bgmRow);
+
+    const volRow = el('div', 'ne-field');
+    volRow.style.cssText = 'display:flex;align-items:center;gap:12px;';
+    const volLabel = el('span', 'ne-field-label', `音量　${Math.round(readVolume() * 100)}`);
+    volLabel.style.flex = 'none';
+    const volInput = el('input', 'ne-range');
+    volInput.type = 'range';
+    volInput.min = '0';
+    volInput.max = '100';
+    volInput.step = '5';
+    volInput.value = String(Math.round(readVolume() * 100));
+    volInput.style.flex = '1';
+    volInput.addEventListener('input', () => {
+      const v = Number(volInput.value) / 100;
+      audio.setVolume(v);
+      writeVolume(v);
+      volLabel.textContent = `音量　${Math.round(v * 100)}`;
+    });
+    // 松手才试听一声 —— 拖动过程中连响会吵
+    volInput.addEventListener('change', () => { ensureAudio(); audio.bong(); });
+    volRow.append(volLabel, volInput);
+    sec.appendChild(volRow);
+
+    /* 雨夜模式的专属机制开关：看模式**声明**了什么机制，不看 guards ——
+       guards 在机制关掉时会被清空，用它判断的话开关自己会消失、再也打不开。 */
+    if (world.rules?.consentEnforced === true) {
+      const mecRow = el('div', 'ne-field');
+      mecRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;';
+      mecRow.appendChild(el('span', 'ne-field-label', '边界机制'));
+      const mecBtn = el('button', 'ne-btn', readBoundary() ? '已开启' : '已关闭');
+      mecBtn.type = 'button';
+      mecBtn.dataset.sfx = 'toggle';
+      mecBtn.title = '关掉后不再拦推进，也不再显示「当轮意愿与边界」卡 —— 只想走剧情时用';
+      mecBtn.addEventListener('click', () => {
+        const next = !readBoundary();
+        writeBoundary(next);
+        mecBtn.textContent = next ? '已开启' : '已关闭';
+        appendSystem(next
+          ? '边界机制已开启 —— 推进前会先看当轮意愿有没有登记'
+          : '边界机制已关闭 —— 重新进入本局后生效（闸门与意愿卡一并收起）', 'warn');
+      });
+      mecRow.appendChild(mecBtn);
+      sec.appendChild(mecRow);
+      sec.appendChild(el('p', 'ne-modal-note',
+        '这是「雨夜模式」自带的机制：推进前先看当轮意愿是否登记，没登记就不放行。'
+        + '关掉它，故事照走，只是不再过这道闸。'));
+    }
 
     sec.appendChild(el('p', 'ne-modal-warn',
       '密钥只存在这台机器的浏览器里。导入的预设会覆盖采样参数与系统提示词。'));
@@ -1943,12 +2125,11 @@ function startMain(root, opts = {}) {
         btn.disabled = true;
         btn.appendChild(el('span', 'ne-choice-why', opt.reason ?? '条件不成立'));
         if (opt.reasonDetail) btn.title = opt.reasonDetail;
-        btn.addEventListener('pointerenter', () => audio.hover());
       } else {
-        btn.addEventListener('pointerenter', () => audio.hover());
+        // 悬停音与点击音由全站委托层统一发（见 installUiFeedback）——
+        // 这里再挂一次就会叠成两响
         btn.addEventListener('click', () => {
           ensureAudio();
-          audio.pick();
           choose(opened.event, opt.key, '');
         });
       }
@@ -2288,7 +2469,6 @@ function startMain(root, opts = {}) {
 
   btnSide.addEventListener('click', () => toggle(drawerLeft, 'has-left', btnSide));
   btnGear.addEventListener('click', () => {
-    audio.toggle(true);
     openSettingsModal();
   });
 
@@ -2378,13 +2558,13 @@ function startMain(root, opts = {}) {
     for (const t of IMPORT_TABS) {
       const b = el('button', `import-cat${t === importTab ? ' is-on' : ''}`);
       b.type = 'button';
+      b.dataset.sfx = 'select';
       b.appendChild(el('i', `ic ic-${t.icon}`));
       b.appendChild(el('span', 'import-cat-title', t.label));
       b.appendChild(el('span', 'import-cat-sub', t.sub));
       b.addEventListener('click', () => {
         importTab = t;
         catBtns.forEach(x => x.classList.toggle('is-on', x === b));
-        audio.pageTurn();
       });
       catBtns.push(b);
       catRow.appendChild(b);
@@ -2714,6 +2894,7 @@ function renderBoot(host) {
   const modeRow = el('div', 'boot-modes');
   for (const m of [{ id: 'tea', label: '茶馆标准' }, { id: 'rainnight', label: '雨夜模式' }]) {
     const b = el('button', `boot-mode${readMode() === m.id ? ' is-on' : ''}`);
+    b.dataset.sfx = 'select';
     b.type = 'button';
     b.appendChild(el('span', 'boot-mode-name', m.label));
     b.appendChild(el('span', 'boot-mode-sub', m.id === 'rainnight' ? '边界机制 · 暗色主题' : '通用引擎 · 白玻璃'));
@@ -2730,7 +2911,6 @@ function renderBoot(host) {
           x.classList.add('is-nudged');
         }
       });
-      audio.pick();
     });
     modeRow.appendChild(b);
   }

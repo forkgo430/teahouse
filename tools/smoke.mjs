@@ -140,8 +140,15 @@ async function run() {
 
     // 玩法段：推进方式 / 群聊 / 玩家设定 —— 这三个开关是后来加的
     const modalText = (q('.ne-modal') || {}).innerText || '';
-    for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '这一轮谁开口', '点名谁谁答', '谁可以不开口', '你（玩家）的名字', '你（玩家）的设定', '设定放在哪', '以什么身份发']) {
+    for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '这一轮谁开口', '点名谁谁答', '谁可以不开口', '你（玩家）的名字', '你（玩家）的设定', '设定放在哪', '以什么身份发', '音效', '背景音乐', '音量']) {
       if (!modalText.includes(label)) R.missing.push('设置面板缺「' + label + '」');
+    }
+    // 边界机制是雨夜模式声明的机制，只有那个模式该出现这个开关
+    if ('${mode}' === 'rainnight' && !modalText.includes('边界机制')) {
+      R.missing.push('雨夜模式的设置里没有「边界机制」开关');
+    }
+    if ('${mode}' !== 'rainnight' && modalText.includes('边界机制')) {
+      R.missing.push('茶馆标准不该出现「边界机制」开关');
     }
   } else R.missing.push('.ne-icon-btn 设置');
 

@@ -79,6 +79,9 @@ export function createWorld(def = {}) {
     book: (def.worldbook && def.worldbook.length) ? createWorldbook(def.worldbook) : null,
     loreBudget: def.loreBudget ?? 1024,
     maxSkips: def.maxSkips ?? 12,
+    // 模式级：雨的浓度（0 = 不下雨）与这个模式声明的机制
+    rainLevel: Number(def.rainLevel) || 0,
+    rules: def.rules ?? null,
     index: buildIndex(events),
   };
   return world;

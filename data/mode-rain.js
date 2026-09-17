@@ -2414,6 +2414,12 @@ export function createRainWorld(createWorldFn) {
     statLabels: w.statLabels,
     worldbook: w.worldbook,
     guards: RAINNIGHT_MODE.guards(),
+    /* 模式级字段也要交给世界 —— 它们本来就在 RAINNIGHT_MODE 顶层躺着，
+       但从没被传下去：UI 判 `world.rainLevel > 0` 决定起不起 BGM，
+       而 world 上根本没有这个键，于是**雨夜的背景音乐与雨声从来没响过**。
+       rules 同理：它是"这个模式带哪些机制"的声明，设置面板要读它。 */
+    rainLevel: RAINNIGHT_MODE.rainLevel,
+    rules: RAINNIGHT_MODE.rules,
     loreBudget: 1200,
     maxSkips: 24,
   });

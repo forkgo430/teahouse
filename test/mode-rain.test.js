@@ -495,3 +495,31 @@ test('没有任何角色被标成不可推进', () => {
   }
   assert.ok(Object.keys(st.actors).length >= 5);
 });
+
+/* ---------------------------------------------------------------- *
+ * 模式级字段必须传到 world（否则 UI 读不到，静默降级）
+ * ---------------------------------------------------------------- */
+
+test('rainLevel 与 rules 要传到 world 上', () => {
+  const w = world();
+  /* 这两个字段定义在 RAINNIGHT_MODE 顶层，createRainWorld 曾经没往下传、
+     createWorld 的白名单也没收 —— 于是 world.rainLevel 是 undefined，
+     `undefined > 0` 为 false，**雨夜的 BGM 与雨声从头到尾没响过**，
+     而一切看起来都正常（没有报错、没有失败）。这条测试就是钉住它。 */
+  assert.equal(w.rainLevel, 0.85, 'rainLevel 没传到 world —— 雨声与 BGM 永远不会启动');
+  assert.equal(w.rules?.consentEnforced, true, 'rules 没传到 world');
+  assert.equal(w.rules?.turnOnlyConsent, true);
+});
+
+test('engine 的白名单也认这两个字段（两层缺一不可）', () => {
+  const w = createWorld({
+    events: [{
+      id: 'E', title: '测试事件',
+      branches: [{ key: 'A', label: 'A', text: '', cond: null, effects: [] }],
+    }],
+    rainLevel: 0.5,
+    rules: { consentEnforced: true },
+  });
+  assert.equal(w.rainLevel, 0.5);
+  assert.equal(w.rules.consentEnforced, true);
+});

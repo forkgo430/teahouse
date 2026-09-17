@@ -20,6 +20,10 @@ export function createAudio(options = {}) {
     enabled: options.enabled !== false,
     volume: typeof options.volume === 'number' ? options.volume : 0.45,
     ambient: options.ambient !== false,
+    // 背景音乐是**独立开关**，跟音效分开：
+    // 想要"别放音乐"的人不等于想要"别出声"，
+    // 关掉 UI 音效会把按钮反馈一起带走，那是另一件事。
+    bgmEnabled: options.bgmEnabled !== false,
     rainLevel: 0,
   };
 
@@ -54,6 +58,11 @@ export function createAudio(options = {}) {
     deny: '__SND_DENY__',
     confirm: '__SND_CONFIRM__',
     ending: '__SND_ENDING__',
+    back: '__SND_BACK__',
+    closePanel: '__SND_CLOSE__',
+    select: '__SND_SELECT__',
+    bong: '__SND_BONG__',
+    dropped: '__SND_DROP__',
   };
 
   const buffers = Object.create(null);
@@ -202,8 +211,9 @@ export function createAudio(options = {}) {
   const bgm = { buf: null, node: null, gain: null, loading: false, want: false };
 
   async function bgmStart() {
-    bgm.want = true;
-    if (!ctx || !state.enabled || bgm.node) return;
+    bgm.want = true;              // want 记的是"这个场景想要音乐"，与开关分开 ——
+                                  // 关掉再打开时 want 还在，音乐能自己回来
+    if (!ctx || !state.enabled || !state.bgmEnabled || bgm.node) return;
 
     if (!bgm.buf) {
       if (bgm.loading) return;
@@ -217,8 +227,8 @@ export function createAudio(options = {}) {
       }
       bgm.loading = false;
     }
-    // 解码是异步的，回来时可能已经切走或关掉了
-    if (!bgm.want || !state.enabled || bgm.node) return;
+    // 解码是异步的：回来时可能已经切走、关了音乐开关、或静音了
+    if (!bgm.want || !state.enabled || !state.bgmEnabled || bgm.node) return;
 
     bgm.node = ctx.createBufferSource();
     bgm.node.buffer = bgm.buf;
@@ -252,6 +262,15 @@ export function createAudio(options = {}) {
     },
     isReady: () => Boolean(ctx),
     isEnabled: () => state.enabled,
+    isBgmEnabled: () => state.bgmEnabled,
+
+    /** 背景音乐开关（不影响 UI 音效） */
+    setBgmEnabled(on) {
+      state.bgmEnabled = Boolean(on);
+      if (!ctx) return;
+      if (!state.bgmEnabled) bgmStop();
+      else if (bgm.want && !bgm.node) bgmStart();
+    },
 
     setEnabled(on) {
       state.enabled = Boolean(on);
@@ -315,6 +334,36 @@ export function createAudio(options = {}) {
     confirm() {
       blip({ freq: 784, dur: 0.1, type: 'sine', vol: 0.07 });
       blip({ freq: 1046.5, dur: 0.14, type: 'sine', vol: 0.05, delay: 0.07 });
+    },
+
+    /** 后退 / 上一步：下行两音 */
+    back() {
+      blip({ freq: 560, endFreq: 400, dur: 0.09, type: 'triangle', vol: 0.06 });
+      blip({ freq: 380, dur: 0.1, type: 'triangle', vol: 0.04, delay: 0.06 });
+    },
+
+    /** 关闭面板 / 取消：比 back 更闷，收尾感 */
+    closePanel() {
+      blip({ freq: 420, endFreq: 240, dur: 0.13, type: 'sine', vol: 0.06 });
+    },
+
+    /** 轻选（页签、模式切换）：一声干净的短点 */
+    select() {
+      blip({ freq: 880, dur: 0.055, type: 'triangle', vol: 0.055 });
+      noiseBurst({ dur: 0.04, freq: 3200, q: 1.1, vol: 0.03 });
+    },
+
+    /** 重要的事（成就、关键线索）：低音钟 */
+    bong() {
+      blip({ freq: 196, dur: 0.9, type: 'sine', vol: 0.08 });
+      blip({ freq: 392, dur: 0.6, type: 'sine', vol: 0.03, delay: 0.01 });
+      blip({ freq: 587.33, dur: 0.4, type: 'sine', vol: 0.018, delay: 0.02 });
+    },
+
+    /** 东西落定（导入完成、放下物件） */
+    dropped() {
+      blip({ freq: 150, endFreq: 90, dur: 0.16, type: 'sine', vol: 0.08 });
+      noiseBurst({ dur: 0.1, freq: 700, q: 0.7, vol: 0.04 });
     },
 
     /* -------------------------------------------------------------- *
@@ -392,6 +441,11 @@ export function createAudio(options = {}) {
     deny: ['deny', 0.45],
     confirm: ['confirm', 0.5],
     ending: ['ending', 0.6],
+    back: ['back', 0.5],
+    closePanel: ['closePanel', 0.45],
+    select: ['select', 0.5],
+    bong: ['bong', 0.5],
+    dropped: ['dropped', 0.5],
   };
   for (const [method, [name, vol]] of Object.entries(sampleMap)) {
     const synth = api[method];

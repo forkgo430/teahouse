@@ -338,16 +338,59 @@ test('雨夜模式的状态能进 store 并算指纹', () => {
 
 test('雨夜模式的数据规模（实测值，改数据时请同步改这里）', () => {
   const w = world();
-  assert.equal(w.events.length, 38, '事件数变了');
-  assert.equal(w.endings.length, 14, '结局数变了');
-  assert.equal(w.achievements.length, 31, '成就数变了');
-  assert.equal(w.book.entries.length, 15, '世界书条目太少');
-  assert.equal(Object.keys(RAINNIGHT_MODE.world.clueLabels).length, 18, '线索数变了');
-  assert.equal(Object.keys(w.placeLabels).length, 16, '地点数变了');
+  assert.equal(w.events.length, 84, '事件数变了');
+  assert.equal(w.endings.length, 28, '结局数变了');
+  assert.equal(w.achievements.length, 50, '成就数变了');
+  assert.equal(w.book.entries.length, 38, '世界书条目太少');
+  assert.equal(Object.keys(RAINNIGHT_MODE.world.clueLabels).length, 23, '线索数变了');
+  assert.equal(Object.keys(w.placeLabels).length, 43, '地点数变了');
   assert.equal(Object.keys(w.actorLabels).length, 5, '角色数变了');
   assert.equal(w.actorLabels.seeker, '林晚晴');
   assert.equal(w.actorLabels.kin, '周若宁');
   assert.equal(w.actorLabels.lost, '周世杰');
+});
+
+/* ---------------------------------------------------------------- *
+ * 补齐《雨与夜 V4.1》缺口后新增的两条钉子
+ * ---------------------------------------------------------------- */
+
+test('补完的事件与文档 §15.2 的卡片编号对得上', () => {
+  const ids = new Set(world().events.map(e => e.id));
+  // 主线：§15.1.1 里原先没落地、这一轮补齐的编号
+  const mains = [
+    'E11', 'E13', 'E17', 'E18', 'E20', 'E21', 'E22', 'E25',
+    'E27', 'E28', 'E29', 'E30', 'E31', 'E32', 'E33', 'E34',
+    'E35', 'E36', 'E37', 'E39', 'E42', 'E43', 'E45', 'E46',
+    'E47', 'E48', 'E49', 'E50', 'E51', 'E52', 'E53', 'E54',
+    'E55', 'E56',
+  ];
+  // 分支：§15.1.2（B02 / B03 / B15 早先已以 R15 / R20 / R29 落地）
+  const branches = [
+    'B01', 'B04', 'B05', 'B06', 'B07', 'B08', 'B09', 'B10',
+    'B11', 'B12', 'B13', 'B14',
+  ];
+  for (const id of [...mains, ...branches]) {
+    assert.ok(ids.has(id), `文档里的 ${id} 没有落进数据`);
+  }
+});
+
+test('关系推进的分支确实挂了当轮同意闸（手滑删掉时这里会红）', () => {
+  /* 这九个是真正在推进关系的分支。删掉任何一个 requiresConsent，
+     边界 guard 就不再拦截 —— 而它不会报错，只会放行。
+     钉住的是「这九个已知要过闸」，不是去预判以后新加的该不该过闸。 */
+  const w = world();
+  const expect = [
+    'R28.A', 'E18.B', 'E20.A', 'E20.B', 'E21.A',
+    'E22.C', 'E22.D', 'E30.A', 'E31.D',
+  ];
+  const actual = w.events.flatMap(e =>
+    e.branches.filter(b => b.requiresConsent).map(b => `${e.id}.${b.key}`));
+
+  for (const key of expect) {
+    assert.ok(actual.includes(key), `${key} 丢了 requiresConsent —— 闸门对它不再生效`);
+  }
+  assert.equal(actual.length, expect.length,
+    `标了同意闸的分支数从 ${expect.length} 变成了 ${actual.length}，请在上面同步清单`);
 });
 
 test('开局不触发任何结局（兜底结局最容易在这里翻车）', () => {
@@ -382,8 +425,12 @@ test('每个事件的每个分支都能真的走一遍（effects 路径全部合
         { path: 'flags.case_stage', op: 'set', value: 6 },
         { path: 'clues', op: 'push', value: 'S1' },
         { path: 'routes.seeker', op: 'set', value: 'open' },
+        // 涉及若宁的分支同样要过闸 —— 只备晚晴会让 E18.B 等分支
+        // 以「边界：路线未开启」被挡，那是闸门正常工作，不是数据走不通
+        { path: 'routes.kin', op: 'set', value: 'open' },
       ]).state;
       s = applyEffects(s, consentEffects(s, 'seeker', CONSENT.ACCEPT)).state;
+      s = applyEffects(s, consentEffects(s, 'kin', CONSENT.ACCEPT)).state;
 
       // 条件不成立的分支本来就该抛，只有 cond=null 的必须能走通
       if (b.cond !== null && b.cond !== undefined) continue;

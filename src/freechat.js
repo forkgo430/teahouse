@@ -31,7 +31,7 @@ export function personaLines(persona) {
  */
 export function buildFreeMessages({
   brief = '', situation = '', history = [], playerText = '',
-  persona = null, group = false, actors = [], lore = '',
+  persona = null, group = false, actors = [], lore = '', speakers = [],
 } = {}) {
   const names = actors.map(a => a?.name).filter(Boolean);
 
@@ -45,6 +45,10 @@ export function buildFreeMessages({
       '每次回复按发言者分段，每段以【角色名】开头（例如「【' + names[0] + '】……」）。'
       + '只有确实开口或行动的角色才分段；纯场景描写单独成段，不加标记。',
     );
+    // 这一轮谁开口：不提这一句，模型容易让全部角色各说一句，像排队发言
+    if (speakers.length > 0 && speakers.length < names.length) {
+      rules.push(`这一轮请让这些角色回应：${speakers.join('、')}。其余人可以不说话。`);
+    }
   } else if (names.length > 0) {
     rules.push(`当前场景里的角色：${names.join('、')}。用第二人称叙述。`);
   }
@@ -101,6 +105,39 @@ export function parseSegments(raw, { known = [] } = {}) {
   return out
     .map(s => ({ speaker: s.speaker, text: s.text.trim() }))
     .filter(s => s.text);
+}
+
+/**
+ * 这一轮谁开口。
+ *
+ * 做法参考酒馆的 `activation_strategy`（SillyTavern，AGPL-3.0，只取设计思路、
+ * 代码自写）：
+ *   natural —— 玩家这句话里点到谁的名字，就激活谁；一个都没点到则在场全体
+ *   list    —— 在场全体都激活（让模型自己挑谁说）
+ *   manual  —— 随机挑一个
+ *
+ * 另外学它一条：**上一条的发言者默认不再接话**（除非 allowSelf），
+ * 否则同一个角色容易连说两段，像自言自语。
+ */
+export function pickSpeakers({
+  actors = [], playerText = '', strategy = 'natural',
+  lastSpeaker = null, allowSelf = false,
+} = {}) {
+  const alive = actors.filter(a => a && a.name && !a.disabled);
+  if (alive.length === 0) return [];
+
+  const notLast = alive.filter(a => allowSelf || a.name !== lastSpeaker);
+  const pool = notLast.length > 0 ? notLast : alive;
+
+  if (strategy === 'list') return alive;
+  if (strategy === 'manual') {
+    return [pool[Math.floor(Math.random() * pool.length)]];
+  }
+
+  // natural：按名字命中（点名谁，谁答）
+  const text = String(playerText ?? '');
+  const hit = alive.filter(a => text.includes(a.name));
+  return hit.length > 0 ? hit : pool;
 }
 
 /** 段落合成一条纯文本（存档与上下文裁剪都读 text） */

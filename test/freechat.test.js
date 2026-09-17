@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildFreeMessages, parseSegments, segmentsToText, personaLines,
+  buildFreeMessages, parseSegments, segmentsToText, personaLines, pickSpeakers,
 } from '../src/freechat.js';
 
 /* ---------------------------------------------------------------- *
@@ -94,4 +94,65 @@ test('history 转成 user/assistant 轮次，最后一条是玩家刚说的', ()
 test('不替玩家发言：提示词里明确禁止', () => {
   const sys = buildFreeMessages({ brief: 'B', playerText: 'x' })[0].content;
   assert.match(sys, /不要替玩家发言/);
+});
+
+/* ---------------------------------------------------------------- *
+ * 谁开口（做法参考酒馆的 activation_strategy）
+ * ---------------------------------------------------------------- */
+
+const CAST = [{ name: '林晚晴' }, { name: '周若宁' }, { name: '周世杰' }];
+
+test('natural：点到谁的名字就谁答', () => {
+  const got = pickSpeakers({ actors: CAST, playerText: '林晚晴，你怎么想？', strategy: 'natural' });
+  assert.deepEqual(got.map(a => a.name), ['林晚晴']);
+});
+
+test('natural：谁都没点到时，在场全体（排除刚说过的那个）', () => {
+  const got = pickSpeakers({
+    actors: CAST, playerText: '外面还在下雨。', strategy: 'natural', lastSpeaker: '周若宁',
+  });
+  assert.deepEqual(got.map(a => a.name), ['林晚晴', '周世杰']);
+});
+
+test('list：在场全体都激活', () => {
+  const got = pickSpeakers({ actors: CAST, playerText: '随便', strategy: 'list', lastSpeaker: '周若宁' });
+  assert.deepEqual(got.map(a => a.name), ['林晚晴', '周若宁', '周世杰']);
+});
+
+test('manual：只挑一个，且不挑刚说过话的', () => {
+  for (let i = 0; i < 20; i += 1) {
+    const got = pickSpeakers({ actors: CAST, playerText: '', strategy: 'manual', lastSpeaker: '林晚晴' });
+    assert.equal(got.length, 1);
+    assert.notEqual(got[0].name, '林晚晴');
+    assert.ok(CAST.map(a => a.name).includes(got[0].name));
+  }
+});
+
+test('allowSelf 打开后，刚说过话的也能再接', () => {
+  const got = pickSpeakers({
+    actors: [{ name: '林晚晴' }], playerText: '嗯', strategy: 'natural', lastSpeaker: '林晚晴',
+  });
+  assert.deepEqual(got.map(a => a.name), ['林晚晴'], '只有一个人在场时必须让他说，不能返回空');
+
+  const off = pickSpeakers({
+    actors: [{ name: '林晚晴' }, { name: '周若宁' }],
+    playerText: '嗯', strategy: 'natural', lastSpeaker: '林晚晴', allowSelf: false,
+  });
+  assert.deepEqual(off.map(a => a.name), ['周若宁']);
+});
+
+test('disabled 的角色不参与', () => {
+  const got = pickSpeakers({
+    actors: [{ name: '林晚晴', disabled: true }, { name: '周若宁' }],
+    playerText: '林晚晴？', strategy: 'natural',
+  });
+  assert.deepEqual(got.map(a => a.name), ['周若宁']);
+});
+
+test('群聊时提示词里写明这一轮该谁回应', () => {
+  const sys = buildFreeMessages({
+    brief: 'B', playerText: 'x', group: true,
+    actors: CAST, speakers: ['林晚晴'],
+  })[0].content;
+  assert.match(sys, /这一轮请让这些角色回应：林晚晴/);
 });

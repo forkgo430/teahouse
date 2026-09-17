@@ -15,7 +15,7 @@ import { scanWorldbook, renderWorldbook } from './worldbook.js';
 import { applyMacros, buildBuiltins } from './macros.js';
 import { trimHistory } from './context.js';
 import { applyInbound, applyOutbound } from './regex.js';
-import { buildFreeMessages, parseSegments, segmentsToText } from './freechat.js';
+import { buildFreeMessages, parseSegments, segmentsToText, pickSpeakers } from './freechat.js';
 import {
   buildChoiceMessages,
   buildNarrationMessages,
@@ -150,7 +150,10 @@ export function createDirector({ world, client = null, onDelta = null, options =
      * @returns {{ segments:Array<{speaker:string|null,text:string}>, text:string,
      *             source:'model'|'none', lore?:string, error?:Error }}
      */
-    async freeReply({ state, playerText, persona = null, group = false, stream = true }) {
+    async freeReply({
+      state, playerText, persona = null, group = false, stream = true,
+      speakerStrategy = 'natural', allowSelf = false,
+    }) {
       if (!hasModel()) return { segments: [], text: '', source: 'none' };
 
       try {
@@ -162,6 +165,19 @@ export function createDirector({ world, client = null, onDelta = null, options =
           .filter(([, a]) => a.met)
           .map(([id, a]) => ({ id, name: a.name }));
 
+        // 上一轮最后开口的人 —— 用来防「同一角色连着说两段」
+        const lastFree = [...(state.history ?? [])]
+          .reverse()
+          .find(r => Array.isArray(r.segments) && r.segments.some(s => s.speaker));
+        const lastSpeaker = lastFree
+          ? [...lastFree.segments].reverse().find(s => s.speaker)?.speaker ?? null
+          : null;
+
+        const speakers = group
+          ? pickSpeakers({ actors, playerText, strategy: speakerStrategy, lastSpeaker, allowSelf })
+              .map(a => a.name)
+          : [];
+
         const messages = buildFreeMessages({
           brief: world.brief,
           situation: describeSituation(state, world),
@@ -170,6 +186,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
           persona,
           group,
           actors,
+          speakers,
           lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
         });
 

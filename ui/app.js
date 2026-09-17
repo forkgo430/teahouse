@@ -279,6 +279,21 @@ function readChatMode() {
 function writeChatMode(v) {
   try { storage?.setItem(CHAT_KEY, v === 'free' ? 'free' : 'story'); } catch { /* 忽略 */ }
 }
+function readSpeakerStrategy() {
+  try {
+    const v = storage?.getItem('ne.chat.speakers');
+    return v === 'list' || v === 'manual' ? v : 'natural';
+  } catch { return 'natural'; }
+}
+function writeSpeakerStrategy(v) {
+  try { storage?.setItem('ne.chat.speakers', v); } catch { /* 忽略 */ }
+}
+function readAllowSelf() {
+  try { return storage?.getItem('ne.chat.allowSelf') === '1'; } catch { return false; }
+}
+function writeAllowSelf(on) {
+  try { storage?.setItem('ne.chat.allowSelf', on ? '1' : '0'); } catch { /* 忽略 */ }
+}
 function readGroup() {
   try { return storage?.getItem(GROUP_KEY) === '1'; } catch { return false; }
 }
@@ -1565,6 +1580,44 @@ function startMain(root, opts = {}) {
       '开启后，模型会按「【林晚晴】……」这样的分段让每个角色分别说话；不影响存档结构。'));
     play.appendChild(grpField);
 
+    /* 谁开口 —— 做法参考酒馆的 activation_strategy */
+    const spkField = el('div', 'ne-field');
+    spkField.appendChild(el('span', 'ne-field-label', '这一轮谁开口'));
+    const spkRow = el('div', 'ne-modal-actions');
+    spkRow.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;';
+    for (const [v, label, hint] of [
+      ['natural', '点名谁谁答', '你这句话里提到谁的名字，就让谁回应；没提到就大家随意'],
+      ['list', '大家一起答', '在场角色都可以开口，由模型决定谁说'],
+      ['manual', '随机一个', '每轮随机挑一个角色回应'],
+    ]) {
+      const b = el('button', `ne-btn${readSpeakerStrategy() === v ? ' ne-btn-primary' : ''}`, label);
+      b.type = 'button';
+      b.title = hint;
+      b.addEventListener('click', () => {
+        writeSpeakerStrategy(v);
+        spkRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
+        appendSystem(`谁开口：${label}`, 'good');
+      });
+      spkRow.appendChild(b);
+    }
+    spkField.appendChild(spkRow);
+
+    const selfRow = el('div', 'ne-modal-actions');
+    selfRow.style.cssText = 'justify-content:flex-start;margin-top:6px;';
+    const selfBtn = el('button', 'ne-btn', readAllowSelf() ? '可以连着说：已开启' : '可以连着说：已关闭');
+    selfBtn.type = 'button';
+    selfBtn.title = '关闭时，上一条开口的角色这一轮不再接话（避免一个人自言自语）';
+    selfBtn.addEventListener('click', () => {
+      const on = !readAllowSelf();
+      writeAllowSelf(on);
+      selfBtn.textContent = on ? '可以连着说：已开启' : '可以连着说：已关闭';
+    });
+    selfRow.appendChild(selfBtn);
+    spkField.appendChild(selfRow);
+    spkField.appendChild(el('p', 'ne-modal-note',
+      '默认不让同一个角色连着说两段 —— 这条是从酒馆的群聊学来的，不然容易变成自问自答。'));
+    play.appendChild(spkField);
+
     const pn = readPersona();
     const pName = el('label', 'ne-field');
     pName.appendChild(el('span', 'ne-field-label', '你（玩家）的名字'));
@@ -1964,6 +2017,8 @@ function startMain(root, opts = {}) {
         playerText: text,
         persona: readPersona(),
         group: readGroup(),
+        speakerStrategy: readSpeakerStrategy(),
+        allowSelf: readAllowSelf(),
         stream: false,
       });
 

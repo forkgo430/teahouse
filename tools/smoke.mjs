@@ -140,7 +140,7 @@ async function run() {
 
     // 玩法段：推进方式 / 群聊 / 玩家设定 —— 这三个开关是后来加的
     const modalText = (q('.ne-modal') || {}).innerText || '';
-    for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '你（玩家）的名字', '你（玩家）的设定']) {
+    for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '这一轮谁开口', '点名谁谁答', '你（玩家）的名字', '你（玩家）的设定']) {
       if (!modalText.includes(label)) R.missing.push('设置面板缺「' + label + '」');
     }
   } else R.missing.push('.ne-icon-btn 设置');

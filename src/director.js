@@ -15,6 +15,7 @@ import { scanWorldbook, renderWorldbook } from './worldbook.js';
 import { applyMacros, buildBuiltins } from './macros.js';
 import { trimHistory } from './context.js';
 import { applyInbound, applyOutbound } from './regex.js';
+import { buildFreeMessages, parseSegments, segmentsToText } from './freechat.js';
 import {
   buildChoiceMessages,
   buildNarrationMessages,
@@ -137,6 +138,67 @@ export function createDirector({ world, client = null, onDelta = null, options =
       }
 
       return { ok: false, branchKey: null, source: 'none', intent };
+    },
+
+    /**
+     * 自由对话：玩家直接说，模型直接回。不选分支、不推进事件。
+     *
+     * 与 narrate 的分工：narrate 写的是「引擎已经决定的那件事」，
+     * freeReply 写的是「玩家刚说的那句话引出的回应」。
+     * 群的开关只影响提示词与分段，模型不守格式时整段当叙述，照样能显示。
+     *
+     * @returns {{ segments:Array<{speaker:string|null,text:string}>, text:string,
+     *             source:'model'|'none', lore?:string, error?:Error }}
+     */
+    async freeReply({ state, playerText, persona = null, group = false, stream = true }) {
+      if (!hasModel()) return { segments: [], text: '', source: 'none' };
+
+      try {
+        const ctx = assembleContext(state, playerText);
+        const lore = loreFor(state, [playerText, ...recentTexts(state)]);
+
+        // 在场角色 = 已见过的（met）。没见过的人不该凭空开口。
+        const actors = Object.entries(state.actors ?? {})
+          .filter(([, a]) => a.met)
+          .map(([id, a]) => ({ id, name: a.name }));
+
+        const messages = buildFreeMessages({
+          brief: world.brief,
+          situation: describeSituation(state, world),
+          history: (state.history ?? []).slice(-12),
+          playerText: ctx.inbound ?? playerText,
+          persona,
+          group,
+          actors,
+          lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
+        });
+
+        // 导入的预设若带系统提示词，拼在最前面（只影响「怎么说」）
+        if (world.presetSystemPrompt) {
+          messages[0] = {
+            role: 'system',
+            content: `${world.presetSystemPrompt}\n\n${messages[0].content}`,
+          };
+        }
+
+        const raw = (onDelta && stream)
+          ? await client.stream(messages, { temperature: 0.92, maxTokens: 700 }, (_delta, full) => {
+            const partial = cleanNarration(full);
+            if (partial) onDelta(partial);
+          })
+          : await client.complete(messages, { temperature: 0.92, maxTokens: 700 });
+
+        const cleaned = cleanNarration(raw);
+        const text = settings.outboundRules.length > 0
+          ? applyOutbound(cleaned, settings.outboundRules).text
+          : cleaned;
+        if (!text) throw new LLMError('模型返回了空回复', { code: 'empty' });
+
+        const segments = parseSegments(text, { known: actors.map(a => a.name) });
+        return { segments, text: segmentsToText(segments), source: 'model', lore };
+      } catch (e) {
+        return { segments: [], text: '', source: 'none', error: e };
+      }
     },
 
     /**

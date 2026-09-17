@@ -137,6 +137,12 @@ async function run() {
     gear.click();
     await wait(700);
     need('.ne-modal', '设置面板没弹出');
+
+    // 玩法段：推进方式 / 群聊 / 玩家设定 —— 这三个开关是后来加的
+    const modalText = (q('.ne-modal') || {}).innerText || '';
+    for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '你（玩家）的名字', '你（玩家）的设定']) {
+      if (!modalText.includes(label)) R.missing.push('设置面板缺「' + label + '」');
+    }
   } else R.missing.push('.ne-icon-btn 设置');
 
   // ⑤ 右缘书架：打开，检查三本书的几何

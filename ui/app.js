@@ -266,6 +266,40 @@ function buildAtmosphere(host) {
 
 const MODE_KEY = 'ne.mode';
 
+/* 玩法设置：推进方式 / 群聊 / 玩家设定。
+   与模型配置同层，存在本地 —— 换模式不丢，清数据才没。 */
+const CHAT_KEY = 'ne.chat.driver';
+const GROUP_KEY = 'ne.chat.group';
+const PERSONA_NAME_KEY = 'ne.persona.name';
+const PERSONA_DESC_KEY = 'ne.persona.desc';
+
+function readChatMode() {
+  try { return storage?.getItem(CHAT_KEY) === 'free' ? 'free' : 'story'; } catch { return 'story'; }
+}
+function writeChatMode(v) {
+  try { storage?.setItem(CHAT_KEY, v === 'free' ? 'free' : 'story'); } catch { /* 忽略 */ }
+}
+function readGroup() {
+  try { return storage?.getItem(GROUP_KEY) === '1'; } catch { return false; }
+}
+function writeGroup(on) {
+  try { storage?.setItem(GROUP_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
+}
+function readPersona() {
+  try {
+    return {
+      name: storage?.getItem(PERSONA_NAME_KEY) ?? '',
+      desc: storage?.getItem(PERSONA_DESC_KEY) ?? '',
+    };
+  } catch { return { name: '', desc: '' }; }
+}
+function writePersona(name, desc) {
+  try {
+    storage?.setItem(PERSONA_NAME_KEY, name ?? '');
+    storage?.setItem(PERSONA_DESC_KEY, desc ?? '');
+  } catch { /* 忽略 */ }
+}
+
 function readMode() {
   try {
     const v = storage?.getItem(MODE_KEY);
@@ -582,7 +616,43 @@ function startMain(root, opts = {}) {
     return box;
   }
 
+  /**
+   * 自由对话的一条记录。
+   * 群聊时按 segments 逐段渲染，每段带发言者；没分段就整段当叙述。
+   */
+  function freeNode(record, index) {
+    const box = el('div', 'ne-msg ne-msg-narrator ne-msg-free');
+    box.dataset.turn = String(record.turn ?? index + 1);
+    box.style.animationDelay = `${Math.min(index, 8) * 40}ms`;
+
+    const head = el('div', 'ne-msg-head');
+    head.appendChild(el('span', 'ne-msg-kind', '自由对话'));
+    const slot = world.slotLabels?.[record.slot] ?? record.slot;
+    head.appendChild(el('span', 'ne-msg-meta', `第 ${record.day} 天 · ${slot}`));
+    box.appendChild(head);
+
+    const segs = Array.isArray(record.segments) && record.segments.length
+      ? record.segments
+      : [{ speaker: null, text: record.text ?? '' }];
+
+    for (const seg of segs) {
+      if (seg.speaker) {
+        const row = el('div', 'ne-seg');
+        row.appendChild(el('span', 'ne-seg-name', seg.speaker));
+        row.appendChild(el('p', 'ne-msg-text', seg.text));
+        box.appendChild(row);
+      } else {
+        box.appendChild(el('p', 'ne-msg-text', seg.text));
+      }
+    }
+
+    if (swipeState(record).canSwipe) box.appendChild(swipeBar(record, index));
+    return box;
+  }
+
   function narratorNode(record, index) {
+    if (record.mode === 'free') return freeNode(record, index);
+
     const event = world.events.find(e => e.id === record.eventId);
     const branch = event?.branches.find(b => b.key === record.branchKey);
 
@@ -1080,7 +1150,26 @@ function startMain(root, opts = {}) {
       for (const e of entries) {
         const entry = el('div', 'book-entry');
         entry.appendChild(el('span', null, e.heading ?? e.id));
-        entry.appendChild(el('span', 'ne-tag', e.keys.length ? e.keys[0] : '常驻'));
+
+        const right = el('span', 'book-entry-right');
+        right.appendChild(el('span', 'ne-tag', e.keys.length ? e.keys[0] : '常驻'));
+
+        /* 导错了的世界书条目要能单独删掉 ——
+           原先只能整份导入、没法改，删错就得「清除全部本地数据」。 */
+        const del = el('button', 'book-entry-del', '×');
+        del.type = 'button';
+        del.title = `删掉这条：${e.heading ?? e.id}`;
+        del.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const rest = (world.book?.entries ?? []).filter(x => x.id !== e.id);
+          world.book = createWorldbook(rest);
+          audio.toggle(false);
+          appendSystem(`已删除世界书条目「${e.heading ?? e.id}」`, 'warn');
+          render();
+        });
+        right.appendChild(del);
+
+        entry.appendChild(right);
         entry.title = e.content;
         listWrap.appendChild(entry);
       }
@@ -1431,6 +1520,79 @@ function startMain(root, opts = {}) {
     sec.appendChild(actions);
     card.appendChild(sec);
 
+    /* 玩法：推进方式 / 群聊 / 玩家设定 */
+    const play = el('section', 'ne-sec');
+    play.appendChild(el('h3', 'ne-sec-title', '玩法'));
+
+    const drvField = el('div', 'ne-field');
+    drvField.appendChild(el('span', 'ne-field-label', '推进方式'));
+    const drvRow = el('div', 'ne-modal-actions');
+    drvRow.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;';
+    for (const [v, label, hint] of [
+      ['story', '事件驱动', '引擎从事件池选事件，给你分支选项'],
+      ['free', '自由对话', '你说什么就答什么，不推进事件节点（需要接模型）'],
+    ]) {
+      const b = el('button', `ne-btn${readChatMode() === v ? ' ne-btn-primary' : ''}`, label);
+      b.type = 'button';
+      b.title = hint;
+      b.addEventListener('click', () => {
+        writeChatMode(v);
+        drvRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
+        appendSystem(`推进方式已切到「${label}」${v === 'free' ? ' —— 记得接入模型' : ''}`, 'good');
+      });
+      drvRow.appendChild(b);
+    }
+    drvField.appendChild(drvRow);
+    play.appendChild(drvField);
+    play.appendChild(el('p', 'ne-modal-note',
+      '两种方式共用同一份存档、数值与书架；区别只在「这一轮怎么产生」。'));
+
+    const grpField = el('div', 'ne-field');
+    grpField.appendChild(el('span', 'ne-field-label', '群聊'));
+    const grpRow = el('div', 'ne-modal-actions');
+    grpRow.style.cssText = 'justify-content:flex-start;';
+    const grpBtn = el('button', 'ne-btn', readGroup() ? '已开启' : '已关闭');
+    grpBtn.type = 'button';
+    grpBtn.addEventListener('click', () => {
+      const on = !readGroup();
+      writeGroup(on);
+      grpBtn.textContent = on ? '已开启' : '已关闭';
+      appendSystem(on ? '群聊已开：在场角色会各自开口，按【角色名】分段' : '群聊已关：回复按整体叙述', 'good');
+    });
+    grpRow.appendChild(grpBtn);
+    grpField.appendChild(grpRow);
+    grpField.appendChild(el('p', 'ne-modal-note',
+      '开启后，模型会按「【林晚晴】……」这样的分段让每个角色分别说话；不影响存档结构。'));
+    play.appendChild(grpField);
+
+    const pn = readPersona();
+    const pName = el('label', 'ne-field');
+    pName.appendChild(el('span', 'ne-field-label', '你（玩家）的名字'));
+    const pNameInput = el('input', 'ne-field-input');
+    pNameInput.type = 'text';
+    pNameInput.value = pn.name;
+    pNameInput.placeholder = '留空则由模型自由称呼';
+    pName.appendChild(pNameInput);
+
+    const pDesc = el('label', 'ne-field');
+    pDesc.appendChild(el('span', 'ne-field-label', '你（玩家）的设定'));
+    const pDescArea = el('textarea', 'ne-field-area');
+    pDescArea.rows = 3;
+    pDescArea.value = pn.desc;
+    pDescArea.placeholder = '年龄、身份、与在场角色的关系…… 只喂给模型，不进数值系统';
+    pDesc.appendChild(pDescArea);
+
+    const pSave = el('div', 'ne-modal-actions');
+    const pSaveBtn = el('button', 'ne-btn ne-btn-primary', '保存玩家设定');
+    pSaveBtn.type = 'button';
+    pSaveBtn.addEventListener('click', () => {
+      writePersona(pNameInput.value.trim(), pDescArea.value.trim());
+      appendSystem('玩家设定已保存', 'good');
+    });
+    pSave.appendChild(pSaveBtn);
+    play.append(pName, pDesc, pSave);
+    card.appendChild(play);
+
     /* 模式与数据 */
     const misc = el('section', 'ne-sec');
     misc.appendChild(el('h3', 'ne-sec-title', '模式与数据'));
@@ -1742,6 +1904,12 @@ function startMain(root, opts = {}) {
     const text = input.value.trim();
     if (!text || busy) return;
 
+    // 自由对话：不选分支、不推进事件，模型直接答
+    if (readChatMode() === 'free') {
+      await submitFree(text);
+      return;
+    }
+
     const opened = currentTurn;
     if (!opened?.event) { appendSystem('现在没有可以推进的事了', 'warn'); return; }
 
@@ -1770,6 +1938,66 @@ function startMain(root, opts = {}) {
 
     await choose(opened.event, decision.branchKey, text);
     input.focus();
+  }
+
+  /**
+   * 自由对话的一轮。
+   *
+   * 落库形状与事件驱动一致（history 里一条记录），只是 eventId/branchKey 为 null、
+   * 多一个 segments（群聊分段）。这样存档、回退、正文重建全都照旧能用 ——
+   * 不用为"没走事件"再开一套。
+   */
+  async function submitFree(text) {
+    if (!director.hasModel()) {
+      appendSystem('自由对话需要先接入模型（设置里填端点与模型名）', 'warn');
+      return;
+    }
+
+    input.value = '';
+    setBusy(true);
+    audio.begins();
+
+    try {
+      const st = store.getState();
+      const res = await director.freeReply({
+        state: st,
+        playerText: text,
+        persona: readPersona(),
+        group: readGroup(),
+        stream: false,
+      });
+
+      if (res.source !== 'model') {
+        appendSystem(res.error ? `模型没答上来：${res.error.message}` : '模型没答上来', 'warn');
+        return;
+      }
+
+      const entry = {
+        turn: (st.history ?? []).length + 1,
+        eventId: null,
+        branchKey: null,
+        mode: 'free',
+        text: res.text,
+        variants: [res.text],
+        variantIndex: 0,
+        segments: res.segments,
+        said: text,
+        day: st.clock.day,
+        slot: st.clock.slot,
+        where: st.where,
+        changes: [],
+      };
+
+      const after = applyEffects(st, [{ path: 'history', op: 'push', value: entry }]).state;
+      store.commit(after);
+      render();
+      audio.settles();
+    } catch (e) {
+      appendSystem(`自由对话出错：${e.message}`, 'warn');
+    } finally {
+      setBusy(false);
+      input.focus();
+    }
   }
 
   inputRow.addEventListener('submit', (e) => {
@@ -1808,14 +2036,20 @@ function startMain(root, opts = {}) {
     const { actor, book } = result;
     if (!actor) throw new Error('角色卡里没有角色信息');
 
-    if (store.getState().actors[actor.id]) {
-      throw new Error(`已经有一个 id 为「${actor.id}」的角色，这份卡会顶掉它 —— 先给卡改个名字`);
+    /* id 撞了不中断导入：自动加序号。
+       撞 id 是常见事（内置角色的 id 是 seeker/kin/lost/collector，
+       导入一份自己的卡很容易撞上），为此把整次导入打回去没必要。 */
+    let finalId = actor.id;
+    let renamed = false;
+    for (let n = 2; store.getState().actors[finalId]; n += 1) {
+      finalId = `${actor.id}_${n}`;
+      renamed = true;
     }
 
-    world.actorLabels = { ...(world.actorLabels ?? {}), [actor.id]: actor.name };
+    world.actorLabels = { ...(world.actorLabels ?? {}), [finalId]: actor.name };
     world.statLabels = {
       ...(world.statLabels ?? {}),
-      [actor.id]: Object.fromEntries(actor.stats.map(s => [s.key, s.label ?? s.key])),
+      [finalId]: Object.fromEntries(actor.stats.map(s => [s.key, s.label ?? s.key])),
     };
 
     let bookNote = '';
@@ -1825,8 +2059,8 @@ function startMain(root, opts = {}) {
     }
 
     const next = structuredClone(store.getState());
-    next.actors[actor.id] = {
-      id: actor.id,
+    next.actors[finalId] = {
+      id: finalId,
       name: actor.name,
       met: false,
       adult: actor.adult !== false,
@@ -1835,7 +2069,8 @@ function startMain(root, opts = {}) {
     };
     store.commit(next);
 
-    return `已导入角色「${actor.name}」${bookNote}`;
+    const idNote = renamed ? `（id「${actor.id}」已有，改用「${finalId}」）` : '';
+    return `已导入角色「${actor.name}」${idNote}${bookNote}`;
   }
 
   /** 预设：覆盖采样参数，系统提示词交给 director 拼接 */

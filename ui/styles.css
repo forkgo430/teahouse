@@ -2140,6 +2140,30 @@
 
   .book-spine:hover { filter: brightness(1.12); }
 
+  /* ── 自由对话的消息段（群聊）─────────────────────────────
+     每个角色一段，段头带名字。名字用主题色，和叙述正文区分开。 */
+  .ne-msg-free .ne-seg {
+    position: relative;
+    margin: 10px 0 0;
+    padding-left: 12px;
+    border-left: 2px solid var(--line-gold);
+  }
+
+  .ne-msg-free .ne-seg:first-of-type { margin-top: 2px; }
+
+  .ne-seg-name {
+    display: block;
+    margin-bottom: 3px;
+    font-family: var(--serif);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--gold);
+  }
+
+  .ne-msg-free .ne-seg .ne-msg-text { margin: 0; }
+
+  .ne-msg-free .ne-msg-kind { color: var(--gold-dim); }
+
   /* 内页：转轴在左缘（贴着书脊），合上时转出去 */
   .book-body {
     position: relative;
@@ -2380,6 +2404,40 @@
   }
 
   .book-entry .ne-tag { flex: none; }
+
+  /* 条目右侧：标签 + 删除。删除平时几乎隐形，hover 才现出来 ——
+     书架是拿来看的，不是拿来按的。 */
+  .book-entry-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+  }
+
+  .book-entry-del {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ink-3);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--dur), color var(--dur), border-color var(--dur);
+  }
+
+  .book-entry:hover .book-entry-del { opacity: 0.55; }
+  .book-entry-del:hover {
+    opacity: 1;
+    color: var(--warn, #d0553f);
+    border-color: currentColor;
+  }
 
   /* ── 雨夜模式 ───────────────────────────────────────── */
 

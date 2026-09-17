@@ -39,6 +39,7 @@ const MODULES = [
   'src/context.js',
   'src/prompts.js',
   'src/regex.js',
+  'src/freechat.js',
   'src/director.js',
   'src/swipe.js',
   'data/demo.js',

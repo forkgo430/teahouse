@@ -35,6 +35,7 @@ const MODULES = [
   'src/save.js',
   'src/importers.js',
   'src/llm.js',
+  'src/style.js',
   'src/narrator.js',
   'src/context.js',
   'src/prompts.js',
@@ -68,6 +69,8 @@ function resolveSpec(fromRel, spec) {
 
 function transform(rel, code) {
   const exported = new Set();
+  /** 记下「从哪个模块要了哪些名字」，出了 build 之后跨模块核对 */
+  const imported = [];
   let out = code;
 
   if (/export\s+default/.test(out)) {
@@ -91,6 +94,10 @@ function transform(rel, code) {
           return parts.length === 2 ? `${parts[0]}: ${parts[1]}` : parts[0];
         })
         .join(', ');
+      imported.push({
+        from: id,
+        names: list.split(',').map(x => x.split(/\s+as\s+/)[0].trim()).filter(Boolean),
+      });
       return `const { ${names} } = __req(${JSON.stringify(id)});`;
     },
   );
@@ -123,7 +130,7 @@ function transform(rel, code) {
     throw new Error(`${rel} 里还有 ${leftovers.length} 处未处理的 export 写法`);
   }
 
-  return { code: out, exported: [...exported] };
+  return { code: out, exported: [...exported], imported };
 }
 
 function moduleChunk(rel) {
@@ -131,7 +138,10 @@ function moduleChunk(rel) {
   if (!existsSync(path)) throw new Error(`找不到模块：${rel}`);
 
   const raw = readFileSync(path, 'utf8');
-  const { code, exported } = transform(rel, raw);
+  const { code, exported, imported } = transform(rel, raw);
+
+  IMPORT_EDGES.push({ rel, imported });
+  EXPORTS_BY_MODULE.set(toId(rel), new Set(exported));
 
   return [
     `__def(${JSON.stringify(toId(rel))}, function (__req) {`,
@@ -177,6 +187,7 @@ const ICONS = {
   history: 'assets/icons/history.svg',
   cup: 'assets/icons/cup.svg',
   x: 'assets/icons/x.svg',
+  chevron: 'assets/icons/chevron.svg',
 };
 
 function inlineAsset(relPath) {
@@ -190,8 +201,55 @@ function inlineAsset(relPath) {
   return `data:${mime};base64,${readFileSync(p).toString('base64')}`;
 }
 
+const IMPORT_EDGES = [];
+/** rel -> Set(导出名)，由 moduleChunk 填充 */
+const EXPORTS_BY_MODULE = new Map();
+
+/**
+ * 跨模块校验：别人从你这儿 import 的名字，你到底导出了没有。
+ *
+ * 为什么必须有这道闸：打包器把 `import { a } from './x.js'` 直接改写成
+ * `const { a } = __req('./x.js')`。目标模块没有导出 a 时，解构结果是
+ * **undefined，不报错**。于是 `defaultStack(undefined)` 这种一路裸奔到运行期，
+ * 症状是"某个面板空白""某段提示词凭空消失"，而构建日志一片绿。
+ *
+ * 这个坑是真踩过的：`ui/app.js` 从 narrator.js 取 NARRATION_SYSTEM，
+ * 而后者只是 import 它自用、没放进导出表 —— 构建成功、页面能开、
+ * 引擎叙事规则那条锁定条目内容是空的。
+ */
+function checkImports(exportsByModule) {
+  const problems = [];
+  for (const { rel, imported } of IMPORT_EDGES) {
+    for (const { from, names } of imported) {
+      const target = exportsByModule.get(from);
+      if (!target) {
+        problems.push(`${rel} import 了不存在的模块 ${from}`);
+        continue;
+      }
+      for (const n of names) {
+        if (!target.has(n)) {
+          problems.push(`${rel} 从 ${from} 取的 ${n} 没有被导出`);
+        }
+      }
+    }
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      '跨模块导入校验失败（这些名字在运行期会是 undefined，不会报错）：\n  '
+      + problems.join('\n  '),
+    );
+  }
+}
+
 function build() {
-  let chunks = MODULES.map(moduleChunk).join('\n\n');
+  IMPORT_EDGES.length = 0;
+  EXPORTS_BY_MODULE.clear();
+  const chunks = [];
+  for (const rel of MODULES) chunks.push(moduleChunk(rel));
+  // moduleChunk 已把导出表填进 EXPORTS_BY_MODULE；全部模块走完再跨模块核对
+  checkImports(EXPORTS_BY_MODULE);
+
+  let chunksJoined = chunks.join('\n\n');
 
   const cssPath = join(ROOT, STYLES);
   if (!existsSync(cssPath)) throw new Error(`找不到样式文件：${STYLES}`);
@@ -201,7 +259,7 @@ function build() {
   for (const [key, relPath] of Object.entries(ASSETS)) {
     const data = inlineAsset(relPath);
     css = css.split(`__ASSET_${key}__`).join(data);
-    chunks = chunks.split(`__SND_${key}__`).join(data);
+    chunksJoined = chunksJoined.split(`__SND_${key}__`).join(data);
   }
 
   // 图标：每个 SVG 生成一个 mask 类（颜色跟 currentColor）
@@ -246,7 +304,7 @@ ${css}
     return box;
   }
 
-${chunks}
+${chunksJoined}
 
   var app = __req(${JSON.stringify(toId(ENTRY))});
   app.mount(document.getElementById("app"));
@@ -262,7 +320,8 @@ ${chunks}
     throw new Error(`产物含外部资源引用（违反离线约束）：${externals.join(', ')}`);
   }
   if (/^\s*import\s|\bexport\s+(function|const|class|default)/m.test(html)) {
-    throw new Error('产物里还残留 ESM 语法，转换未完成');
+    const m = html.match(/^.*(?:^\s*import\s|\bexport\s+(?:function|const|class|default)).*$/m);
+    throw new Error(`产物里还残留 ESM 语法，转换未完成：${m ? m[0].trim().slice(0, 160) : '?'}`);
   }
   if (/__(?:ASSET|SND)_[A-Z0-9_]+__/.test(html)) {
     throw new Error('产物里还有未替换的资产占位符');

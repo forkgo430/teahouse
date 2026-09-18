@@ -28,28 +28,50 @@
 
 ## 2. 缺口一：正则作用点只做了一半
 
-酒馆正则规则可在**四个点**运行（`placement`）：
+> ⚠️ **本节曾被两次写错，最后以 GitHub 源码为准。**
+> 社区教程（含博主视频）普遍讲成"四个作用点选一"，读源码才知道**不是**。
 
-| 酒馆 | 作用于 | 改存储？ | 进上下文？ | 茶馆现状 |
-|---|---|---|---|---|
-| `editinput` | 玩家输入，进提示词前 | 否 | **是** | ✅ `scope: 'in'` |
-| `editoutput` | 模型回复，保存前 | **是** | **是** | ✅ `scope: 'out'` |
-| `editprocess` | 组装期的整个提示词 | 否 | **是** | ❌ 无 |
-| **`editdisplay`** | **渲染出来的消息** | 否 | **否** | ❌ **无** |
+读 `JS-Slash-Runner/src/function/tavern_regex.ts` 得到酒馆正则的**真实数据模型**：
+它是 **source × destination 的二维矩阵**，两个维度正交、各自可多选：
 
-**`editdisplay` 就是「格式显示」的真身**：只改玩家看到的，存储与发送原样不动，
-所以坏规则也弄不坏对话。它是「**前端卡 token 安全**」的根本机制 ——
-酒馆博主警告的「选错选项导致 HTML 塞进上下文、token 暴涨」，
-根因就是该用 `display` 却用了 `output`/`process`。
+```
+source（这段文本从哪来）      destination（结果送去哪）
+  user_input  玩家输入          display  只改渲染
+  ai_output   模型输出          prompt   进提示词
+  slash_command / world_info / reasoning
+```
 
-**茶馆缺 `display` 这一类**，因此目前做不了「渲染层独占、上下文干净」的改造。
+- `destination.display = true` → 走渲染层，**不进上下文**（格式显示的真身）
+- `destination.prompt  = true` → 进提示词，**改模型看到的东西**
 
-### 还缺的规则字段
+**关键**：一条规则可以同时挂 `display` 与 `prompt`，也可只挂其一。
+「格式显示」不是第四个"作用点"，而是 **destination 维度上的一个取值**。
+社区说的 `editdisplay`，源码里是 `destination: { display: true }`。
 
-`minDepth` / `maxDepth`（按楼层深度限定）、`runOnEdit`（编辑时是否重跑）、
-`trimStrings`（替换前先从捕获内容里剔掉）、`{{match}}`（插入整个匹配串）、
-`markdownOnly` / `promptOnly`（只作用于渲染 / 只作用于提示）、
-scope 三档（Global / Scoped 卡内 / Preset 预设内）。
+**前端卡 token 安全的根本**就是：**只开 `display`、不开 `prompt`**。
+博主警告的"选错导致 HTML 塞进上下文"，根因是把 `prompt` 也打开了。
+
+**茶馆现状**：`scope: 'in' | 'out' | 'both'` 只覆盖了 source 维度的一小半，
+**没有 destination 维度** → 无法表达"只改渲染、不进提示" → 前端卡的安全前提不成立。
+
+### 源码里的完整规则字段（`TavernRegex` 类型）
+
+```ts
+{ id, script_name, enabled,
+  find_regex, trim_strings[], replace_string,
+  source: { user_input, ai_output, slash_command, world_info, reasoning },
+  destination: { display, prompt },
+  run_on_edit, min_depth, max_depth }
+```
+
+还注意到两处细节：
+- **`formatAsTavernRegexedString(text, source, destination, {depth})`** —— 
+  公开 API 也是 source/destination 两个参数，印证二维模型。
+- `trim_strings` 是**在替换前先从匹配内容里剔掉**的字符串数组（酒馆 UI 的 "Trim Out"）。
+- `destination === 'display'` 时传 `isMarkdown: true`，`'prompt'` 时传 `isPrompt: true` ——
+  同一个正则**在两个目标下行为可以不同**。
+- 另有 **scope 三档**：Global（存 settings）/ Character（存角色卡 extensions）/
+  Preset（存预设）。茶馆导入器已支持这三种来源的解析，但只落一处（全局 settings）。
 
 ---
 
@@ -58,20 +80,35 @@ scope 三档（Global / Scoped 卡内 / Preset 预设内）。
 酒馆的「前端卡」不是正则单打独斗，它还依赖一个独立扩展
 **JS-Slash-Runner（酒馆助手）**，由它提供：
 
-| 它提供的能力 | 说明 |
-|---|---|
-| iframe 渲染 | 原生楼层渲染不支持 `<button>` 等，靠 iframe 渲染完整 HTML/CSS/JS |
-| 脚本系统 | 全局脚本 + 内置库（jQuery / Lodash…） |
-| 变量系统 | 变量增删改查，提示词里可直接读 |
-| 世界书 API | 读 / 建 / 改 / 删条目 |
-| 提示词注入 | 覆盖或追加 |
-| 事件系统 | 监听酒馆事件、自定义事件 |
-| 音频 | BGM / 音效播放模式 |
+| 它提供的能力 | 源码位置 | 说明 |
+|---|---|---|
+| iframe 渲染 | `src/iframe/`、`src/function/displayed_message.ts` | 原生楼层不支持 `<button>` 等，靠 iframe 渲染完整 HTML/CSS/JS |
+| 前端判定 | `src/util/is_frontend.ts` | **只认三个字符串**：内容含 `html>` / `<head>` / `<body` 即当界面渲染 |
+| 变量系统 | `src/function/variables.ts` | 五层作用域 + zod schema |
+| 世界书操作 | `src/function/lorebook.ts`、`worldbook.ts` | 读 / 建 / 改 / 删 |
+| 提示词注入 | `src/function/inject.ts` | 覆盖或追加 |
+| 正则对位 | `src/function/tavern_regex.ts` | 即上文的 source×destination |
 
-**安全警示（该扩展自己写的）**：执行外部 JS 可能窃取 API 密钥、聊天记录，
-或破坏设置。它用 iframe 隔离来降风险，但风险依然存在。
+### ⚠️ 纠正："iframe 沙箱"是误读，它其实是**能力桥接**
 
-茶馆**没有任何一块**——`ui/` 下无渲染沙箱、无变量系统、无模板引擎。
+我原先写"用 iframe 隔离以降低风险"——**读 `src/iframe/predefine.js` 后确认恰恰相反**。
+它在 iframe 内执行：
+
+```js
+_.merge(window, _.pick(window.parent, ['EjsTemplate','TavernHelper','YAML','showdown','z']));
+_.merge(window, _.omit(window.parent.TavernHelper, '_bind'));
+Object.defineProperty(window, 'SillyTavern', { get: () => window.parent.SillyTavern });
+```
+
+即**主动把父窗口的整套 API 桥进 iframe**：`SillyTavern.getContext()`、`TavernHelper`
+（含世界书 / 变量 / 注入 / 事件 / 音频的全部函数）都能直接调。
+iframe 在这里的作用是**让 iframe 里的脚本能反过来操作酒馆**，不是把它关起来。
+
+对茶馆的启示：**想靠"嵌套一个 iframe"来防住 AI 产出的脚本，是防不住的** ——
+只要桥了 API，脚本就能拿到一切；不桥 API，前端卡也就没有能力（读不到状态）。
+**安全边界不在沙箱，在"允不允许任意 JS"这个决策上**（见第 6 节阶段 2）。
+
+茶馆**没有任何一块**——`ui/` 下无渲染层、无变量系统、无模板引擎。
 
 ---
 
@@ -105,21 +142,50 @@ scope 三档（Global / Scoped 卡内 / Preset 预设内）。
 
 ---
 
-## 6. 若要补，建议分期
+## 6. 若要补，建议分期（**尚未拍板，先别动**）
 
-- **阶段 0**｜`src/regex.js` 补 `placement` 四作用点，其中 `display` 为新增链路。
-  改动集中、不碰引擎，是后续一切的地基。
+- **阶段 0**｜`src/regex.js` 补 **`destination` 维度**（不是"四作用点"）。
+  现有 `scope: 'in'|'out'|'both'` 保留为 source，新增 `display` / `prompt` 双目标；
+  `display` 是不进上下文的新链路。改动集中、不碰引擎，是后续一切的地基。
 - **阶段 1**｜`ui/cardrender.js`：匹配 → HTML 模板插槽 → 渲染。
   **必须 sanitize（AI 输出不可信）**，禁止 `innerHTML` 直插。
-- **阶段 2**｜沙箱：声明式白名单（契合确定性，推荐）或 iframe
-  `sandbox="allow-scripts"`（不给 `allow-same-origin`）。
-- **阶段 3**｜变量系统：**直接暴露引擎 state 只读快照** ——
+- **阶段 2**｜安全模型**先决策**：允许任意 JS（学酒馆：桥 API，风险自负）
+  还是**只做声明式白名单**（契合本项目确定性路线，推荐）。
+  源码已证明"用 iframe 就安全"是假的，别把安全寄望在沙箱容器上。
+- **阶段 3**｜变量系统：酒馆是**五层作用域**（global / preset / character / chat / message）
+  + **zod schema 校验**。茶馆应**直接暴露引擎 state 只读快照** ——
   比酒馆从文本反解析可靠得多，是茶馆的天然优势。
 - **阶段 4**｜**只在自由对话 / 群聊模式落地**，事件驱动主线不碰。
+
+**另记一条可借鉴的实现细节**：酒馆助手的"这段是不是前端界面"判定**极简** ——
+`is_frontend.ts` 只检查内容里有没有 `html>` / `<head>` / `<body` 三个字符串之一。
+不做解析、不要求完整 HTML。这比想象中粗糙，但够用，代价是误判风险。
 
 ---
 
 ## 7. 一句话总结
 
-**世界书与提示栈：已对齐酒馆。正则作用点：做了一半，缺 `display`。
+**世界书与提示栈：已对齐酒馆。正则：只做了 source 维度，缺 `destination`
+（`display` / `prompt` 两个目标）→ 前端卡的安全前提不成立。
 前端卡渲染层：完全空白。拟人化：属内容职责，不该做成引擎规则。**
+
+---
+
+## 8. 源码调研记录（可复查）
+
+| 事项 | 来源 | 结论 |
+|---|---|---|
+| 正则真实模型 | `JS-Slash-Runner/src/function/tavern_regex.ts` | **source × destination 二维**，非"四作用点" |
+| 公开 API 签名 | 同上 `formatAsTavernRegexedString(text, source, destination, opts)` | 两参数印证二维 |
+| 规则字段 | 同上 `type TavernRegex` | 含 `trim_strings` / `run_on_edit` / `min_depth` / `max_depth` |
+| 变量作用域 | `src/function/variables.ts` | 五层：global / preset / character / chat / message |
+| 变量校验 | 同上 `registerVariableSchema` | **zod schema**，按作用域注册 |
+| iframe 真相 | `src/iframe/predefine.js` | **桥接父窗口 API**，不是隔离 |
+| 前端判定 | `src/util/is_frontend.ts` | 只查 `html>` / `<head>` / `<body` 三串 |
+| iframe 预置库 | `src/iframe/third_party_message.html` | jQuery / jQuery-UI / Vue / Vue-Router / tailwind / FontAwesome |
+
+**方法**：`api.github.com` 列目录（`/contents/<path>`）+ `raw.githubusercontent.com`
+取文件。两者均直连可用，不必走连接器 MCP 绕道。
+
+**合规**：酒馆与 JS-Slash-Runner 均为 **AGPL-3.0**。本页只记**设计思路与接口形状**，
+不含其源码实现；本项目任何相关改动须自写。

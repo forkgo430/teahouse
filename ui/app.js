@@ -351,6 +351,7 @@ const MODE_KEY = 'ne.mode';
 const CHAT_KEY = 'ne.chat.driver';
 const GROUP_KEY = 'ne.chat.group';
 const DISABLED_KEY = 'ne.chat.disabled';
+const STREAM_KEY = 'ne.chat.stream';
 const PERSONA_POS_KEY = 'ne.persona.position';
 const PERSONA_DEPTH_KEY = 'ne.persona.depth';
 const PERSONA_ROLE_KEY = 'ne.persona.role';
@@ -399,6 +400,15 @@ function readGroup() {
 }
 function writeGroup(on) {
   try { storage?.setItem(GROUP_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
+}
+/* 流式输出。默认开 —— 逐字出来比等一整段体验好得多，
+   这个开关的用意是「让玩家能关」，不是「默认关」。
+   没写过（返回 undefined）时按开处理，所以判断条件是 !== '0' 而不是 === '1'。 */
+function readStream() {
+  try { return storage?.getItem(STREAM_KEY) !== '0'; } catch { return true; }
+}
+function writeStream(on) {
+  try { storage?.setItem(STREAM_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
 }
 function readDisabled() {
   try {
@@ -2377,6 +2387,29 @@ function startMain(root, opts = {}) {
     play.appendChild(el('p', 'ne-modal-note',
       '两种方式共用同一份存档、数值与书架；区别只在「这一轮怎么产生」。'));
 
+    /* 流式：只影响「文字怎么出现在屏幕上」，不碰存档内容。
+       放在玩法里而不是小二面板里 —— 小二那套开关管的是能力，这条管的是呈现。 */
+    const stmField = el('div', 'ne-field');
+    stmField.appendChild(el('span', 'ne-field-label', '流式输出'));
+    const stmRow = el('div', 'ne-modal-actions');
+    stmRow.style.cssText = 'justify-content:flex-start;';
+    const stmBtn = el('button', 'ne-btn', readStream() ? '流式输出 · 开' : '流式输出 · 关');
+    stmBtn.type = 'button';
+    stmBtn.title = '开着：文字边生成边显示；关掉：等整段生成完再一次显示';
+    stmBtn.dataset.sfx = 'toggle';   // 开 / 关
+    stmBtn.addEventListener('click', () => {
+      const on = !readStream();
+      writeStream(on);
+      stmBtn.textContent = on ? '流式输出 · 开' : '流式输出 · 关';
+      appendSystem(on ? '流式输出已开：回复会逐字显示' : '流式输出已关：等整段生成完再一次显示', 'good');
+    });
+    stmRow.appendChild(stmBtn);
+    stmField.appendChild(stmRow);
+    stmField.appendChild(el('p', 'ne-modal-note',
+      '只影响自由对话的显示过程 —— 存档、分段、切换版本都不受它影响；'
+      + '关掉只是少看一次逐字生成，内容一模一样。'));
+    play.appendChild(stmField);
+
     const grpField = el('div', 'ne-field');
     grpField.appendChild(el('span', 'ne-field-label', '群聊'));
     const grpRow = el('div', 'ne-modal-actions');
@@ -2784,6 +2817,37 @@ function startMain(root, opts = {}) {
   }
 
   /**
+   * 自由对话的流式占位：自己造气泡，不走 markLive()。
+   *
+   * markLive() 取的是「已落库、已渲染」的那条叙述消息 —— 自由对话发起时
+   * 还没有这条记录，history 里最后一条是上一轮的，借用它会写错地方。
+   * 这里造一个 class 与 freeNode() 同族的临时气泡，并挂上 liveTarget，
+   * 让 handleDelta 有的可写。返回值交给 clearFreeLive() 拆掉。
+   *
+   * 不设 dataset.turn：switchVariant / refreshSwipeBar 用 [data-turn=...]
+   * 定位节点，临时节点不该被它们认领。
+   */
+  function streamFreeLive() {
+    const box = el('div', 'ne-msg ne-msg-narrator ne-msg-free ne-msg-live');
+    const head = el('div', 'ne-msg-head');
+    head.appendChild(el('span', 'ne-msg-kind', '自由对话'));
+    box.appendChild(head);
+    const text = el('p', 'ne-msg-text', '…');
+    box.appendChild(text);
+
+    stream.appendChild(box);
+    liveTarget = { node: box, text };
+    scrollToEnd();
+    return box;
+  }
+
+  /** 拆掉流式占位气泡。落库后 render() 会按 history 重画，这一步只是清理中间态。 */
+  function clearFreeLive(box) {
+    if (box && box.parentNode) box.parentNode.removeChild(box);
+    if (liveTarget && liveTarget.node === box) liveTarget = null;
+  }
+
+  /**
    * 把最终正文写回 history。第一个版本要同步进 variants，
    * 否则切换条上会留着预写文本，和屏幕上看到的对不上。
    */
@@ -2975,6 +3039,17 @@ function startMain(root, opts = {}) {
     setBusy(true);
     audio.begins();
 
+    /* 流式的落点。
+       不能用 markLive()：它是给「已经落库、已经渲染成叙述气泡」的那条占位用的，
+       靠 querySelectorAll('.ne-msg-narrator') 取最后一个 —— 自由对话此刻还没落库，
+       末尾那一条可能是上一轮的记录，接上去会把增量写进别人的气泡里。
+       所以这里自己造一个临时气泡：class 与 freeNode() 保持同一族
+       （ne-msg ne-msg-narrator ne-msg-free），这样它长得和最终结果一样，
+       切到 render() 时视觉上不跳；再挂 ne-msg-live 复用已有的打字光标与脉冲样式。
+       不设 dataset.turn —— 免得 switchVariant / refreshSwipeBar 的
+       [data-turn=...] 查询命中这个还没落库的临时节点。 */
+    const live = streamFreeLive();
+
     try {
       const st = store.getState();
       const res = await director.freeReply({
@@ -2985,7 +3060,7 @@ function startMain(root, opts = {}) {
         speakerStrategy: readSpeakerStrategy(),
         allowSelf: readAllowSelf(),
         disabled: readDisabled(),
-        stream: false,
+        stream: readStream(),
       });
 
       if (res.source !== 'model') {
@@ -2993,6 +3068,9 @@ function startMain(root, opts = {}) {
         return;
       }
 
+      /* 流式中间态只显示未分段的裸文本（onDelta 喂的是 cleanNarration(full)），
+         群聊的 segments 要等下面 render() 才切成【角色名】分段气泡。
+         这是本期接受的取舍：先看到字，再看到结构 —— 不是丢内容。 */
       const entry = {
         turn: (st.history ?? []).length + 1,
         eventId: null,
@@ -3021,6 +3099,10 @@ function startMain(root, opts = {}) {
     } catch (e) {
       appendSystem(`自由对话出错：${e.message}`, 'warn');
     } finally {
+      /* 无论走哪条分支都要收掉占位气泡。
+         freeReply 失败时返回 { source:'none', error } 而不抛异常，
+         靠 catch 兜不住 —— 必须放 finally，否则屏幕上永远留一个 '…'。 */
+      clearFreeLive(live);
       setBusy(false);
       input.focus();
     }

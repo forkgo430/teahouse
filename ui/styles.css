@@ -2825,6 +2825,13 @@
   margin-top: 10px;
 }
 
+/* 62px 的格子里「添加」会被内边距挤成两行（实测）。
+   告诉按钮别折行，再把内边距收窄，让它老老实实待在格子里。 */
+.stack-add .ne-btn {
+  white-space: nowrap;
+  padding: 0 6px;
+}
+
 /* ══════════════════════════════════════════════════════════════
    正则规则 —— 手册式清单
    ──────────────────────────────────────────────────────────────
@@ -3277,6 +3284,187 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
   .rx-check-box::after,
   .rx-in,
   .rx-del { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   折叠分节 —— 设置面板的呼吸
+   ──────────────────────────────────────────────────────────────
+   设置面板里有七段，其中五段是「配一次就不动」的（预算 / 提示词栈 /
+   正则 / 模型接入 / 模式与数据）。平铺出来三十多行控件，把当天真要按的
+   开关全淹没了。
+
+   折叠头做成 button 而不是 div：键盘能 Tab 到、能回车开合，
+   屏幕阅读器也能靠 aria-expanded 念出开合态。
+
+   折叠体用 grid-template-rows 0fr → 1fr 收放（不是 max-height 猜高度），
+   所以任意内容高度都能动画到位，不会切字。
+   ══════════════════════════════════════════════════════════════ */
+
+.ne-fold { margin-bottom: 14px; }
+
+.ne-fold-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px 9px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--paper-line, var(--line));
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--gold-dim);
+  cursor: pointer;
+  transition: color var(--dur, 0.18s) var(--ease, ease);
+}
+
+.ne-fold-head:hover { color: var(--gold); }
+.ne-fold-head:focus-visible {
+  outline: 1px solid var(--line-gold, var(--gold));
+  outline-offset: 2px;
+}
+
+.ne-fold-title {
+  font-family: var(--serif);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+}
+
+/* 右侧灰字：把「现在是什么值」摆到合上的那一行上，
+   否则一折叠就再也看不见当前配置。
+   `margin-left:auto` 顶着箭头靠右；没有 note 的那几段由
+   .ne-fold-title 上的 margin-left:auto 接手，箭头位置才不会忽左忽右。 */
+.ne-fold-note {
+  margin-left: auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46%;
+}
+
+/* 没有右侧说明的那几段（如「外观 · 玻璃」），让标题自己把箭头顶到最右。
+   否则箭头紧贴标题，和合上的那几行对不齐。 */
+.ne-fold-head > .ne-fold-title:last-of-type { margin-right: auto; }
+
+.ne-fold-arrow {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  color: var(--ink-3);
+  transition: transform 0.24s var(--ease, ease), color var(--dur, 0.18s);
+}
+
+.ne-fold.is-open .ne-fold-arrow {
+  transform: rotate(90deg);
+  color: var(--gold-dim);
+}
+
+/* 合上的那一行箭头是「可以点开」的唯一提示，别让它淡到看不见 */
+.ne-fold:not(.is-open) .ne-fold-arrow { opacity: 0.9; }
+
+.ne-fold-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s var(--ease, ease);
+}
+
+.ne-fold.is-open .ne-fold-body { grid-template-rows: 1fr; }
+
+.ne-fold-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 收放时下方留白也一起长出来，不然展开瞬间内容是贴着头顶的 */
+.ne-fold.is-open .ne-fold-inner > :first-child { margin-top: 14px; }
+
+/* 面板里其余地方的 ne-sec 保持原间距 */
+.ne-fold .ne-sec { margin-bottom: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ne-fold-body,
+  .ne-fold-arrow { transition: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   叙述文风 —— 旋钮 + 接口条款清单 + 只读预览
+   ══════════════════════════════════════════════════════════════ */
+
+/* 接口条款清单：不是警告，是"引擎在替你守什么"的说明书。
+   用中性色不做成红色 —— 上锁是默认的正常状态，不是错误。 */
+.style-clauses {
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm, 8px);
+  background: var(--glass, rgba(255, 255, 255, 0.04));
+}
+
+.style-clause {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.style-clause + .style-clause {
+  border-top: 1px dashed var(--paper-line, var(--line));
+  padding-top: 6px;
+  margin-top: 3px;
+}
+
+.style-clause-name {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--ink-1);
+  letter-spacing: 0.04em;
+}
+
+/* 条款名右侧一条虚点引到说明，像目录的引导线 */
+.style-clause-name::after {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  margin-left: 6px;
+  border-bottom: 1px dotted var(--ink-3);
+  vertical-align: 0.22em;
+  opacity: 0.5;
+}
+
+.style-clause-hint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+/* 只读预览：等宽、可滚、选中色照旧 —— 玩家要能复制出去。
+   故意不做成灰掉的 disabled 观感：它是"给你看的",不是"你不能碰的"。 */
+.style-preview {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm, 8px);
+  background: var(--field, rgba(0, 0, 0, 0.16));
+  color: var(--ink-2);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.72;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.style-preview:focus-visible {
+  outline: 1px solid var(--line-gold, var(--gold));
+  outline-offset: 1px;
 }
 
 /* ── 左侧状态面板：深度美化 ──────────────────────────────── */

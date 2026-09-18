@@ -23,7 +23,14 @@ import { createStore, applyEffects, hashState } from '../src/state.js';
 import { exportStore, importToStore, SaveError } from '../src/save.js';
 import { createClient, readConfig, writeConfig, clearConfig } from '../src/llm.js';
 import { createDirector } from '../src/director.js';
-import { labelForPath, resolveValue, NARRATION_SYSTEM } from '../src/narrator.js';
+import { labelForPath, resolveValue } from '../src/narrator.js';
+/* NARRATION_SYSTEM 从 style.js 取，不从 narrator.js ——
+   narrator.js 只是 import 它自用，没有把它放进导出表（打包器按导出表解构，
+   转不出来的名字会静默变成 undefined）。 */
+import {
+  normalizeStyle, composeNarrationSystem, DEFAULT_STYLE, NARRATION_SYSTEM,
+  PERSON_OPTIONS, LANG_OPTIONS, LENGTH_OPTIONS, INTERFACE_CLAUSES,
+} from '../src/style.js';
 import { defaultStack, buildSystemMessage, assembleStack } from '../src/prompts.js';
 import { budgetStatus } from '../src/context.js';
 import { importAny, importAs, importPngCard, KIND } from '../src/importers.js';
@@ -136,6 +143,7 @@ applyGlass();
 
 /* 提示词栈 / 正则规则 / 上下文预算：持久化读取 */
 const STACK_KEY = 'ne.promptstack';
+const STYLE_KEY = 'ne.narration.style';
 const REGEX_KEY = 'ne.regexrules';
 const CTX_KEY = 'ne.ctxbudget';
 
@@ -576,11 +584,21 @@ function installUiFeedback() {
     const kind = node.dataset?.sfx || 'pick';
     const fn = typeof audio[kind] === 'function' ? audio[kind] : audio.pick;
     fn.call(audio);
+    /* 诊断钩子：产物探针靠这行数「点了几个按钮、每个按钮用了哪条采样路径」。
+       没有它就只能看"没报错"，而"没报错"证明不了任何事。 */
+    if (window.__SFX) {
+      window.__SFX._lastTag = kind;
+      const st = audio.status ? audio.status() : null;
+      if (st) window.__SFX._ui = { kind, hits: st.diag.sampleHits, misses: st.diag.sampleMisses, loaded: st.loaded.length, pending: st.pending.length, failed: st.failed.length };
+    }
   });
 }
 
 export function mount(root) {
   installUiFeedback();
+
+  /* 诊断出口：探针只读，不改变行为。放这里是因为 mount 是产物唯一的入口。 */
+  window.__SFX_API = audio;
 
   /* 音频设置必须在这里读，不能写在模块顶层。
      顶层调 readSoundOn 时 storage 还没初始化（它定义在文件更下面），
@@ -661,6 +679,8 @@ function startMain(root, opts = {}) {
   let variantCount = readSwipeCount();
   let contextBudget = readJson(CTX_KEY, 6000);
   let promptStack = readJson(STACK_KEY, null) ?? defaultStack(NARRATION_SYSTEM);
+  /* 文风：人称 / 语言 / 字数 / 补充要求 + 硬约束开关 */
+  let narrationStyle = normalizeStyle(readJson(STYLE_KEY, {}));
   /* 正则：区分「从没装过」与「装过但删空了」。
      前者给一份出厂规则（否则面板一片空白，玩家不知道规则长什么样），
      后者尊重玩家的删除 —— 不把规则塞回来。 */
@@ -688,6 +708,8 @@ function startMain(root, opts = {}) {
         outboundRules: regexRules,
         /* 提示词栈必须真的装配进消息 —— 只存不读等于给玩家一个假开关 */
         promptStack,
+        /* 文风同理：存了不传给 director 也是假开关 */
+        narrationStyle,
       },
     });
   }
@@ -804,6 +826,7 @@ function startMain(root, opts = {}) {
   input.placeholder = '也可以直接打字，例如「开门」「装作没听见」…';
   const btnSend = el('button', 'ne-send', '说');
   btnSend.type = 'submit';
+  btnSend.dataset.sfx = 'confirm';   // 提交这句话 = 一次确认，不是随手点的选项
   inputRow.append(input, btnSend);
   const tip = el('p', 'ne-composer-tip', '点选项 / 输入序号 / 输入分支字母 / 直接用一句话说自己想做什么');
   composerInner.append(choices, inputRow, tip);
@@ -821,6 +844,7 @@ function startMain(root, opts = {}) {
   function iconBtn(text, icon) {
     const b = el('button', 'ne-icon-btn');
     b.type = 'button';
+    b.dataset.sfx = 'select';        // 顶栏图标按钮 = 选一个面板，不是"确认"
     if (icon) b.appendChild(el('i', `ic ic-${icon}`));
     b.appendChild(el('span', 'ne-btn-text', text));
     return b;
@@ -986,12 +1010,14 @@ function startMain(root, opts = {}) {
     prev.type = 'button';
     prev.title = '上一版';
     prev.disabled = !st.canPrev;
+    prev.dataset.sfx = 'back';
     prev.addEventListener('click', () => switchVariant(turnIndex, -1));
 
     const next = el('button', 'ne-swipe-btn', '›');
     next.type = 'button';
     next.title = '下一版';
     next.disabled = !st.canNext;
+    next.dataset.sfx = 'pick';       // 换一版正文，本质是"再抽一次"
     next.addEventListener('click', () => switchVariant(turnIndex, 1));
 
     bar.append(prev, el('span', 'ne-swipe-label', `${st.index + 1} / ${st.total}`), next);
@@ -1224,6 +1250,7 @@ function startMain(root, opts = {}) {
       for (const v of CONSENT_ORDER) {
         const b = el('button', `book-tab${value === v ? ' is-on' : ''}`, v);
         b.type = 'button';
+        b.dataset.sfx = 'select';    // 选当轮意愿，是"挑一个"不是"提交"
         b.addEventListener('click', () => registerConsent(a.id, v));
         actions.appendChild(b);
       }
@@ -1458,6 +1485,7 @@ function startMain(root, opts = {}) {
           });
           const cancel = el('button', 'ne-btn', '取消');
           cancel.type = 'button';
+          cancel.dataset.sfx = 'closePanel';   // 取消 = 把这块收起来
           cancel.addEventListener('click', () => box.remove());
           acts.append(ok, cancel);
 
@@ -1526,6 +1554,40 @@ function startMain(root, opts = {}) {
    * 齿轮：所有管理动作收进一个模态
    * ---------------------------------------------------------------- */
 
+  /* 折叠分节：设置面板太长，观感全被长表单压掉了。
+     只收「配一次就不动」的段；当天要按的开关（外观 / 玩法）默认摊开。
+     展开态记在内存里，关掉面板再开还是原样，不写盘。 */
+  const FOLD_STATE = new Map();
+
+  function foldSection(title, opts = {}) {
+    const sec = el('section', 'ne-sec ne-fold');
+    const key = opts.key ?? title;
+    const open = FOLD_STATE.get(key) ?? opts.open ?? false;
+    if (open) sec.classList.add('is-open');
+
+    const head = el('button', 'ne-fold-head');
+    head.type = 'button';
+    head.dataset.sfx = 'toggle';
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    head.appendChild(el('span', 'ne-fold-title', title));
+    if (opts.note) head.appendChild(el('span', 'ne-fold-note', opts.note));
+    head.appendChild(el('i', 'ic ic-chevron ne-fold-arrow'));
+
+    const body = el('div', 'ne-fold-body');
+    const inner = el('div', 'ne-fold-inner');
+
+    head.addEventListener('click', () => {
+      const now = !sec.classList.contains('is-open');
+      sec.classList.toggle('is-open', now);
+      head.setAttribute('aria-expanded', now ? 'true' : 'false');
+      FOLD_STATE.set(key, now);
+    });
+
+    body.appendChild(inner);
+    sec.append(head, body);
+    return { sec, body: inner };
+  }
+
   function openSettingsModal() {
     const overlay = el('div', 'ne-modal');
     const card = el('div', 'ne-modal-card');
@@ -1537,14 +1599,15 @@ function startMain(root, opts = {}) {
     for (const [label, fn] of [['存档', save], ['读档', load], ['回退一步', undo], ['重新开始', reset]]) {
       const b = el('button', 'ne-btn', label);
       b.type = 'button';
+      b.dataset.sfx = 'bong';        // 存档类动作改变"这一局还能不能回来"，给低音钟
       b.addEventListener('click', () => { fn(); overlay.remove(); });
       quick.appendChild(b);
     }
     card.appendChild(quick);
 
     /* ── 上下文预算 ── */
-    const ctxSec = el('section', 'ne-sec');
-    ctxSec.appendChild(el('h3', 'ne-sec-title', '上下文预算'));
+    const ctxFold = foldSection('上下文预算', { key: 'ctx', note: `${contextBudget} tokens` });
+    const ctxSec = ctxFold.body;
     const ctxLab = el('span', 'ne-field-label',
       `预算 ${contextBudget} tokens · 当前历史约 ${budgetStatus(store.getState().history, contextBudget).tokens}`);
     const ctxRow = el('div', 'ne-field');
@@ -1565,11 +1628,11 @@ function startMain(root, opts = {}) {
     ctxSec.appendChild(ctxRow);
     ctxSec.appendChild(el('p', 'ne-modal-warn',
       '超预算的旧轮次自动折叠为「前情提要」。最近 4 轮与结局轮永不裁剪。'));
-    card.appendChild(ctxSec);
+    card.appendChild(ctxFold.sec);
 
     /* ── 提示词栈 ── */
-    const stackSec = el('section', 'ne-sec');
-    stackSec.appendChild(el('h3', 'ne-sec-title', '提示词栈'));
+    const stackFold = foldSection('提示词栈', { key: 'stack', note: `${promptStack.length} 条` });
+    const stackSec = stackFold.body;
     const stackWrap = el('div');
 
     function saveStack() {
@@ -1583,6 +1646,7 @@ function startMain(root, opts = {}) {
         const row = el('div', 'stack-entry');
         const sw = el('button', 'ne-btn stack-sw', entry.enabled ? '开' : '关');
         sw.type = 'button';
+        sw.dataset.sfx = 'toggle';   // 开 / 关，字面就是 toggle
         if (entry.locked) sw.disabled = true;
         sw.addEventListener('click', () => {
           entry.enabled = !entry.enabled;
@@ -1630,6 +1694,7 @@ function startMain(root, opts = {}) {
       contentIn.placeholder = '提示词内容';
       const addBtn = el('button', 'ne-btn', '添加');
       addBtn.type = 'button';
+      addBtn.dataset.sfx = 'confirm';   // 新增条目 = 落定一件事
       addBtn.addEventListener('click', () => {
         if (!contentIn.value.trim()) return;
         promptStack.push({
@@ -1651,11 +1716,130 @@ function startMain(root, opts = {}) {
     }
     renderStackUI();
     stackSec.appendChild(stackWrap);
-    card.appendChild(stackSec);
+    card.appendChild(stackFold.sec);
+
+    /* ── 叙述文风 ──
+       人称 / 语言 / 字数 / 补充要求四项由玩家定；
+       硬约束开关管着三条「引擎不要弄坏数据」的接口条款（正文干净 /
+       数值一致 / 拒绝越权指令）。锁着的时候那三条照旧发给模型，松开就不发。 */
+    const styleSum = () => {
+      const p = PERSON_OPTIONS.find(o => o.value === narrationStyle.person)?.label ?? '?';
+      const l = LANG_OPTIONS.find(o => o.value === narrationStyle.lang)?.label ?? '?';
+      const n = LENGTH_OPTIONS.find(o => o.value === narrationStyle.length)?.label ?? '?';
+      return `${p} · ${l} · ${n}`;
+    };
+    const styleFold = foldSection('叙述文风', { key: 'style', note: styleSum() });
+    const styleSec = styleFold.body;
+
+    /* 只读预览框必须先建出来：saveStyle 会写它，
+       而 const 在 TDZ 里是**抛错**不是 undefined —— 建晚了第一次点旋钮就炸。 */
+    const previewBox = el('textarea', 'style-preview');
+    previewBox.readOnly = true;
+    previewBox.rows = 10;
+    previewBox.spellcheck = false;
+    previewBox.value = composeNarrationSystem(narrationStyle);
+
+    const saveStyle = () => {
+      writeJson(STYLE_KEY, narrationStyle);
+      // 不重建 director（会丢 onDelta，正在流的这段就断了），直接改字段
+      director.setNarrationStyle(narrationStyle);
+      styleFold.sec.querySelector('.ne-fold-note').textContent = styleSum();
+      previewBox.value = composeNarrationSystem(narrationStyle);
+    };
+
+    /** 一行三个胶囊的单选组 —— 和「推进方式」那组同款，视觉上是一家人 */
+    const mkPicker = (labelText, options, key) => {
+      const field = el('div', 'ne-field');
+      field.appendChild(el('span', 'ne-field-label', labelText));
+      const row = el('div', 'ne-modal-actions');
+      row.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;';
+      for (const o of options) {
+        const b = el('button',
+          `ne-btn${narrationStyle[key] === o.value ? ' ne-btn-primary' : ''}`,
+          o.hint ? `${o.label}（${o.hint}）` : o.label);
+        b.type = 'button';
+        b.dataset.sfx = 'select';
+        b.addEventListener('click', () => {
+          narrationStyle = { ...narrationStyle, [key]: o.value };
+          saveStyle();
+          // 只重画这一组，不整块重建 —— 否则光标和滚动位置都会跳
+          for (const sib of row.children) {
+            const hit = sib.textContent.startsWith(o.label);
+            sib.classList.toggle('ne-btn-primary', hit);
+          }
+        });
+        row.appendChild(b);
+      }
+      field.appendChild(row);
+      return field;
+    };
+
+    styleSec.appendChild(mkPicker('人称', PERSON_OPTIONS, 'person'));
+    styleSec.appendChild(mkPicker('语言', LANG_OPTIONS, 'lang'));
+    styleSec.appendChild(mkPicker('字数', LENGTH_OPTIONS, 'length'));
+
+    /* 补充要求：玩家自己往提示词末尾加一句，比如「多用嗅觉描写」 */
+    const extraField = el('label', 'ne-field');
+    extraField.appendChild(el('span', 'ne-field-label', '补充要求（可留空）'));
+    const extraInput = el('input', 'ne-input');
+    extraInput.type = 'text';
+    extraInput.placeholder = '例：多用嗅觉与触觉描写，少用成语';
+    extraInput.value = narrationStyle.extra;
+    extraInput.addEventListener('change', () => {
+      narrationStyle = { ...narrationStyle, extra: extraInput.value };
+      saveStyle();
+    });
+    extraField.appendChild(extraInput);
+    styleSec.appendChild(extraField);
+
+    /* ── 硬约束开关 ── */
+    const lockRow = el('div', 'ne-field');
+    lockRow.appendChild(el('span', 'ne-field-label', '硬约束'));
+    const lockBtn = el('button', 'ne-btn',
+      narrationStyle.locked ? '已上锁 · 三条接口条款照发' : '已松开 · 接口条款不发');
+    lockBtn.type = 'button';
+    lockBtn.dataset.sfx = 'toggle';
+    lockBtn.addEventListener('click', () => {
+      narrationStyle = { ...narrationStyle, locked: !narrationStyle.locked };
+      saveStyle();
+      lockBtn.textContent = narrationStyle.locked ? '已上锁 · 三条接口条款照发' : '已松开 · 接口条款不发';
+      lockHint.hidden = narrationStyle.locked;
+      lockList.hidden = !narrationStyle.locked;
+    });
+    lockRow.appendChild(lockBtn);
+    styleSec.appendChild(lockRow);
+
+    const lockList = el('div', 'style-clauses');
+    for (const c of INTERFACE_CLAUSES) {
+      const item = el('div', 'style-clause');
+      item.append(
+        el('span', 'style-clause-name', c.label),
+        el('span', 'style-clause-hint', c.hint),
+      );
+      lockList.appendChild(item);
+    }
+    lockList.hidden = !narrationStyle.locked;
+    styleSec.appendChild(lockList);
+
+    const lockHint = el('p', 'ne-modal-warn',
+      '松开后这三条不再发给模型。人称 / 语言 / 字数照旧生效 —— '
+      + '但正文里的元话语、与数值变化矛盾的描写、以及「忽略以上指令」这类越权要求，'
+      + '都只能靠模型自觉了。');
+    lockHint.hidden = narrationStyle.locked;
+    styleSec.appendChild(lockHint);
+
+    /* ── 实际发出的系统提示词：只读展示 ──
+       玩家有权知道引擎到底对模型说了什么。改它请改上面的旋钮，不在这里手改。 */
+    const previewField = el('div', 'ne-field');
+    previewField.appendChild(el('span', 'ne-field-label', '实际发出的系统提示词（只读）'));
+    previewField.appendChild(previewBox);
+    styleSec.appendChild(previewField);
+
+    card.appendChild(styleFold.sec);
 
     /* ── 正则后处理 ── */
-    const rxSec = el('section', 'ne-sec');
-    rxSec.appendChild(el('h3', 'ne-sec-title', '正则后处理'));
+    const rxFold = foldSection('正则后处理', { key: 'regex', note: `${regexRules.length} 条` });
+    const rxSec = rxFold.body;
     const rxWrap = el('div');
 
     function saveRx() {
@@ -1834,11 +2018,11 @@ function startMain(root, opts = {}) {
     rxSec.appendChild(el('p', 'ne-modal-warn',
       '「显示」只改你看到的，「提示词」会让模型读到。前端卡请只勾显示。'
       + '非法正则会自动停用并保留在列表里，改好即恢复。'));
-    card.appendChild(rxSec);
+    card.appendChild(rxFold.sec);
 
-    /* 外观：玻璃旋钮（Aqua 同款，实时生效） */
-    const appearance = el('section', 'ne-sec');
-    appearance.appendChild(el('h3', 'ne-sec-title', '外观 · 玻璃'));
+    /* 外观：玻璃旋钮（Aqua 同款，实时生效）—— 常用，默认摊开 */
+    const appFold = foldSection('外观 · 玻璃', { key: 'glass', open: true });
+    const appearance = appFold.body;
     const glassCfg = readGlassCfg();
     const knobs = [
       { key: 'blur', label: '模糊度', min: 0, max: 40, step: 1, unit: ' px', def: 14 },
@@ -1865,11 +2049,11 @@ function startMain(root, opts = {}) {
     }
     appearance.appendChild(el('p', 'ne-modal-warn',
       '磨砂度 0 = 全透玻璃，2 = 磨砂最重。实时生效并自动保存。'));
-    card.appendChild(appearance);
+    card.appendChild(appFold.sec);
 
     /* 模型接入 */
-    const sec = el('section', 'ne-sec');
-    sec.appendChild(el('h3', 'ne-sec-title', '模型接入'));
+    const apiFold = foldSection('模型接入', { key: 'api', note: client.ready() ? '已接入' : '未接入' });
+    const sec = apiFold.body;
     sec.appendChild(el('p', 'ne-modal-note',
       client.ready()
         ? `已接入：${config.model || '（未命名模型）'}。正文由模型生成，自由输入也有模型兜底。`
@@ -1996,13 +2180,15 @@ function startMain(root, opts = {}) {
     const btnApply = el('button', 'ne-btn ne-btn-primary', '保存');
     const btnClear = el('button', 'ne-btn', '清除模型配置');
     btnApply.type = btnClear.type = 'button';
+    btnApply.dataset.sfx = 'confirm';   // 保存模型配置 = 确认
+    btnClear.dataset.sfx = 'deny';      // 清掉配置是破坏性动作
     actions.append(btnClear, btnApply);
     sec.appendChild(actions);
-    card.appendChild(sec);
+    card.appendChild(apiFold.sec);
 
-    /* 玩法：推进方式 / 群聊 / 玩家设定 */
-    const play = el('section', 'ne-sec');
-    play.appendChild(el('h3', 'ne-sec-title', '玩法'));
+    /* 玩法：推进方式 / 群聊 / 玩家设定 —— 常用，默认摊开 */
+    const playFold = foldSection('玩法', { key: 'play', open: true });
+    const play = playFold.body;
 
     const drvField = el('div', 'ne-field');
     drvField.appendChild(el('span', 'ne-field-label', '推进方式'));
@@ -2015,6 +2201,7 @@ function startMain(root, opts = {}) {
       const b = el('button', `ne-btn${readChatMode() === v ? ' ne-btn-primary' : ''}`, label);
       b.type = 'button';
       b.title = hint;
+      b.dataset.sfx = 'select';    // 二选一，纯选择
       b.addEventListener('click', () => {
         writeChatMode(v);
         drvRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
@@ -2033,6 +2220,7 @@ function startMain(root, opts = {}) {
     grpRow.style.cssText = 'justify-content:flex-start;';
     const grpBtn = el('button', 'ne-btn', readGroup() ? '已开启' : '已关闭');
     grpBtn.type = 'button';
+    grpBtn.dataset.sfx = 'toggle';   // 开 / 关
     grpBtn.addEventListener('click', () => {
       const on = !readGroup();
       writeGroup(on);
@@ -2058,6 +2246,7 @@ function startMain(root, opts = {}) {
       const b = el('button', `ne-btn${readSpeakerStrategy() === v ? ' ne-btn-primary' : ''}`, label);
       b.type = 'button';
       b.title = hint;
+      b.dataset.sfx = 'select';   // 三选一策略，纯选择
       b.addEventListener('click', () => {
         writeSpeakerStrategy(v);
         spkRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
@@ -2072,6 +2261,7 @@ function startMain(root, opts = {}) {
     const selfBtn = el('button', 'ne-btn', readAllowSelf() ? '可以连着说：已开启' : '可以连着说：已关闭');
     selfBtn.type = 'button';
     selfBtn.title = '关闭时，上一条开口的角色这一轮不再接话（避免一个人自言自语）';
+    selfBtn.dataset.sfx = 'toggle';   // 开 / 关
     selfBtn.addEventListener('click', () => {
       const on = !readAllowSelf();
       writeAllowSelf(on);
@@ -2110,6 +2300,7 @@ function startMain(root, opts = {}) {
         const chip = el('button', `ne-member${off.has(a.id) ? ' is-off' : ''}`, a.name);
         chip.type = 'button';
         chip.title = off.has(a.id) ? '点一下让他重新开口' : '点一下让他这一轮不开口';
+        chip.dataset.sfx = 'select';   // 多选成员，逐个挑
         chip.addEventListener('click', () => {
           const cur = new Set(readDisabled());
           if (cur.has(a.id)) cur.delete(a.id); else cur.add(a.id);
@@ -2168,6 +2359,7 @@ function startMain(root, opts = {}) {
       const b = el('button', `ne-btn${personaPos === v ? ' ne-btn-primary' : ''}`, label);
       b.type = 'button';
       b.title = hint;
+      b.dataset.sfx = 'select';   // 三选一位置，纯选择
       b.addEventListener('click', () => {
         personaPos = v;
         posRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
@@ -2199,6 +2391,7 @@ function startMain(root, opts = {}) {
       const b = el('button', `ne-btn${personaRole === v ? ' ne-btn-primary' : ''}`, label);
       b.type = 'button';
       b.title = v === 'user' ? '有些模型对「第一人称设定」反应更好' : '';
+      b.dataset.sfx = 'select';   // 三选一身份，跟上面两组选择同一族
       b.addEventListener('click', () => {
         personaRole = v;
         roleRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
@@ -2211,6 +2404,7 @@ function startMain(root, opts = {}) {
     const pSave = el('div', 'ne-modal-actions');
     const pSaveBtn = el('button', 'ne-btn ne-btn-primary', '保存玩家设定');
     pSaveBtn.type = 'button';
+    pSaveBtn.dataset.sfx = 'confirm';   // 保存 = 确认
     pSaveBtn.addEventListener('click', () => {
       writePersona(pNameInput.value.trim(), pDescArea.value.trim());
       writePersonaExtra({
@@ -2222,11 +2416,11 @@ function startMain(root, opts = {}) {
     });
     pSave.appendChild(pSaveBtn);
     play.append(pName, pDesc, pSave);
-    card.appendChild(play);
+    card.appendChild(playFold.sec);
 
     /* 模式与数据 */
-    const misc = el('section', 'ne-sec');
-    misc.appendChild(el('h3', 'ne-sec-title', '模式与数据'));
+    const miscFold = foldSection('模式与数据', { key: 'misc', note: mode === 'rainnight' ? '雨夜模式' : '茶馆标准' });
+    const misc = miscFold.body;
 
     const modeRow = el('div', 'ne-modal-actions');
     modeRow.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;';
@@ -2234,6 +2428,7 @@ function startMain(root, opts = {}) {
     const btnMode = el('button', 'ne-btn',
       `切换到「${otherMode === 'rainnight' ? '雨夜模式' : '茶馆标准'}」（重载）`);
     btnMode.type = 'button';
+    btnMode.dataset.sfx = 'toggle';   // 换模式重载，字面就是 toggle（不是"确认"）
     btnMode.addEventListener('click', () => {
       writeMode(otherMode);
       window.location.reload();
@@ -2242,13 +2437,14 @@ function startMain(root, opts = {}) {
 
     const btnWipe = el('button', 'ne-btn', '清除全部本地数据');
     btnWipe.type = 'button';
+    btnWipe.dataset.sfx = 'deny';     // 破坏性：删掉全部存档
     btnWipe.addEventListener('click', () => {
       try { storage?.clear(); } catch { /* 忽略 */ }
       window.location.reload();
     });
     modeRow.appendChild(btnWipe);
     misc.appendChild(modeRow);
-    card.appendChild(misc);
+    card.appendChild(miscFold.sec);
 
     overlay.appendChild(card);
     root.appendChild(overlay);
@@ -2300,6 +2496,7 @@ function startMain(root, opts = {}) {
     opened.options.forEach((opt) => {
       const btn = el('button', `ne-choice${opt.available ? '' : ' is-locked'}`);
       btn.type = 'button';
+      btn.dataset.sfx = 'pick';    // 推进选项 = 抽一支签，全站最典型的 pick
       btn.appendChild(el('span', 'ne-choice-key', opt.key));
       btn.appendChild(el('span', null, opt.label));
       if (!opt.available) {
@@ -2368,6 +2565,7 @@ function startMain(root, opts = {}) {
 
     const again = el('button', 'ne-btn ne-btn-primary', '重新开始');
     again.type = 'button';
+    again.dataset.sfx = 'toggle';     // 这不是"确认"——它把当前这一局清掉重来
     again.addEventListener('click', reset);
     const wrap = el('div', 'ne-modal-actions');
     wrap.style.justifyContent = 'center';
@@ -2803,6 +3001,8 @@ function startMain(root, opts = {}) {
     const btnApply = el('button', 'ne-btn ne-btn-primary', '导入');
     const btnClose = el('button', 'ne-btn', '关闭');
     btnApply.type = btnClose.type = 'button';
+    btnApply.dataset.sfx = 'dropped';   // 把东西"放下"进引擎，正好是 dropped 的语义
+    btnClose.dataset.sfx = 'closePanel';
     actions.append(btnClose, btnApply);
     card.appendChild(actions);
 
@@ -3144,6 +3344,7 @@ function renderBoot(host) {
 function bootItem(ic, title, sub, onClick) {
   const item = el('button', 'boot-item');
   item.type = 'button';
+  item.dataset.sfx = 'select';     // 三入口是"挑一条路"，不是提交
   const icWrap = el('span', 'boot-item-ic');
   icWrap.appendChild(el('i', `ic ic-${ic}`));
   item.appendChild(icWrap);
@@ -3190,6 +3391,9 @@ function openWizard(scene, imports, onDone) {
   const btnSkip = el('button', 'ne-btn', '跳过这步');
   const btnNext = el('button', 'ne-btn ne-btn-primary', '下一步');
   btnBack.type = btnSkip.type = btnNext.type = 'button';
+  btnBack.dataset.sfx = 'back';       // 往回走
+  btnSkip.dataset.sfx = 'back';       // 跳过 = 不在这步停留，同样是"往前挪开"，用后撤音收尾
+  btnNext.dataset.sfx = 'confirm';    // 往前一步 = 确认
   btnBack.disabled = true;
   actions.append(btnBack, btnSkip, btnNext);
 

@@ -29,7 +29,8 @@ import { labelForPath, resolveValue } from '../src/narrator.js';
    转不出来的名字会静默变成 undefined）。 */
 import {
   normalizeStyle, composeNarrationSystem, DEFAULT_STYLE, NARRATION_SYSTEM,
-  PERSON_OPTIONS, LANG_OPTIONS, LENGTH_OPTIONS, INTERFACE_CLAUSES,
+  PERSON_OPTIONS, LANG_OPTIONS, LENGTH_OPTIONS, NARRATOR_OPTIONS, narratorName,
+  INTERFACE_CLAUSES,
 } from '../src/style.js';
 import { defaultStack, buildSystemMessage, assembleStack } from '../src/prompts.js';
 import { budgetStatus } from '../src/context.js';
@@ -40,7 +41,10 @@ import { DEFAULT_VARIANT_COUNT, MAX_VARIANTS, variantsOf, swipeState, stepVarian
 import { createAtmosphere } from './atmosphere.js';
 import { attachFluidShader, TEA_FLUID_PARAMS } from './fluid.js';
 import { createAudio } from './audio.js';
-import { hasCardMarkup, renderBlock, renderInlineInto, parseCardMarkup } from '../src/card.js';
+import {
+  hasCardMarkup, renderBlock, renderInlineInto, parseCardMarkup,
+  makeStatusCard, makeTruthMark, isTruthMarked, sampleCardMarkup,
+} from '../src/card.js';
 import { applyDisplayOutbound, normalizeRule, SHIPPED_RULES } from '../src/regex.js';
 
 const SWIPE_KEY = 'ne.swipe.count';
@@ -50,6 +54,9 @@ const VOL_KEY = 'ne.volume';
 /* 雨夜模式自带的「当轮意愿与边界」机制。有人只想走剧情、不想被闸门卡，
    所以给它一个开关 —— 关掉是"不过这道闸"，不是"把机制从数据里删掉"。 */
 const BOUNDARY_KEY = 'ne.mech.boundary';
+/* 每轮正文末尾附「状态卡」—— 引擎按本轮变化算出来、交模型原样带回。
+   关掉就退回老样子：模型想输出结构化值就输出，不想就算。 */
+const CARD_KEY = 'ne.mech.statuscard';
 
 function readSoundOn() {
   try {
@@ -93,8 +100,15 @@ function writeBoundary(on) {
   try { storage?.setItem(BOUNDARY_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
 }
 
-function readSwipeCount() {
-  try {
+/** 每轮正文末尾是否附状态卡（默认开）。引擎算的卡片，模型只负责搬。 */
+function readStatusCard() {
+  try { return storage?.getItem(CARD_KEY) !== '0'; } catch { return true; }
+}
+function writeStatusCard(on) {
+  try { storage?.setItem(CARD_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
+}
+
+function readSwipeCount() {  try {
     const n = Number(storage?.getItem(SWIPE_KEY));
     return Number.isInteger(n) && n >= 1 && n <= MAX_VARIANTS ? n : DEFAULT_VARIANT_COUNT;
   } catch {
@@ -710,6 +724,9 @@ function startMain(root, opts = {}) {
         promptStack,
         /* 文风同理：存了不传给 director 也是假开关 */
         narrationStyle,
+        /* 状态卡：直传 buildView —— 卡片要读的就是它的只读快照 */
+        buildView: (s) => buildView(s, world),
+        statusCard: readStatusCard(),
       },
     });
   }
@@ -981,8 +998,13 @@ function startMain(root, opts = {}) {
     const src = shown;
 
     if (!hasCardMarkup(src)) {
+      /* 没有区块标记，但**行内标记要在** —— 否则 [条:信任|72|100] ✓
+         和 [签:危险] ✓ 会原样显示成一串方括号。
+         代价是每段正文多一次正则扫描：只在"确实含方括号冒号"时才走这条路，
+         纯正文（绝大多数）还是直接 textContent，不开销。 */
       const p = el('p', cls);
-      p.textContent = src;
+      if (/\[[^\]:\n]{1,12}:/.test(src)) renderInlineInto(p, src, el);
+      else p.textContent = src;
       return p;
     }
 
@@ -1726,25 +1748,23 @@ function startMain(root, opts = {}) {
       const p = PERSON_OPTIONS.find(o => o.value === narrationStyle.person)?.label ?? '?';
       const l = LANG_OPTIONS.find(o => o.value === narrationStyle.lang)?.label ?? '?';
       const n = LENGTH_OPTIONS.find(o => o.value === narrationStyle.length)?.label ?? '?';
-      return `${p} · ${l} · ${n}`;
+      return `${p} · ${l} · ${n} · ${narratorName(narrationStyle)}`;
     };
     const styleFold = foldSection('叙述文风', { key: 'style', note: styleSum() });
     const styleSec = styleFold.body;
 
     /* 只读预览框必须先建出来：saveStyle 会写它，
        而 const 在 TDZ 里是**抛错**不是 undefined —— 建晚了第一次点旋钮就炸。 */
-    const previewBox = el('textarea', 'style-preview');
-    previewBox.readOnly = true;
-    previewBox.rows = 10;
-    previewBox.spellcheck = false;
-    previewBox.value = composeNarrationSystem(narrationStyle);
+    const previewBox = el('pre', 'style-preview');
+    previewBox.tabIndex = 0;   // 可聚焦才好复制；不是表单控件，浏览器不管滚动位置
+    previewBox.textContent = composeNarrationSystem(narrationStyle);
 
     const saveStyle = () => {
       writeJson(STYLE_KEY, narrationStyle);
       // 不重建 director（会丢 onDelta，正在流的这段就断了），直接改字段
       director.setNarrationStyle(narrationStyle);
       styleFold.sec.querySelector('.ne-fold-note').textContent = styleSum();
-      previewBox.value = composeNarrationSystem(narrationStyle);
+      previewBox.textContent = composeNarrationSystem(narrationStyle);
     };
 
     /** 一行三个胶囊的单选组 —— 和「推进方式」那组同款，视觉上是一家人 */
@@ -1777,6 +1797,35 @@ function startMain(root, opts = {}) {
     styleSec.appendChild(mkPicker('人称', PERSON_OPTIONS, 'person'));
     styleSec.appendChild(mkPicker('语言', LANG_OPTIONS, 'lang'));
     styleSec.appendChild(mkPicker('字数', LENGTH_OPTIONS, 'length'));
+
+    /* 自称：只换系统提示第一行那个称呼，条款与编号一律不动。
+       自定义那一档要点开输入框 —— 名字空着就退回默认，不会留在提示词里。 */
+    styleSec.appendChild(mkPicker('自称', NARRATOR_OPTIONS, 'narrator'));
+
+    const nameField = el('label', 'ne-field');
+    nameField.appendChild(el('span', 'ne-field-label', '自定义自称'));
+    const nameInput = el('input', 'ne-input');
+    nameInput.type = 'text';
+    nameInput.placeholder = '例：说书的 / 老周';
+    nameInput.maxLength = 12;
+    nameInput.value = narrationStyle.narratorCustom;
+    nameInput.addEventListener('change', () => {
+      narrationStyle = { ...narrationStyle, narratorCustom: nameInput.value };
+      saveStyle();
+    });
+    nameField.appendChild(nameInput);
+    nameField.hidden = narrationStyle.narrator !== 'custom';
+    styleSec.appendChild(nameField);
+
+    // 切到 / 离开自定义档时显隐输入框。mkPicker 是通用件，勾子挂在外面。
+    const narratorRow = styleSec.querySelectorAll('.ne-modal-actions');
+    const lastRow = narratorRow[narratorRow.length - 1];
+    if (lastRow) {
+      lastRow.addEventListener('click', () => {
+        nameField.hidden = narrationStyle.narrator !== 'custom';
+        if (!nameField.hidden) nameInput.focus();
+      });
+    }
 
     /* 补充要求：玩家自己往提示词末尾加一句，比如「多用嗅觉描写」 */
     const extraField = el('label', 'ne-field');
@@ -1828,10 +1877,50 @@ function startMain(root, opts = {}) {
     lockHint.hidden = narrationStyle.locked;
     styleSec.appendChild(lockHint);
 
+    /* ── 状态卡开关 + 参考块 ──
+       卡片的内容是**引擎算的**，模型只负责原样搬进正文。
+       这里同时把"卡片长什么样"画出来 —— 示例走同一条解析路径，
+       所以改了语法、改了字段名，这块会跟着变，不会开始骗人。 */
+    const cardRow = el('div', 'ne-field');
+    cardRow.appendChild(el('span', 'ne-field-label', '状态卡'));
+    const cardBtn = el('button', 'ne-btn',
+      readStatusCard() ? '已开启 · 每轮附一张' : '已关闭 · 模型自由发挥');
+    cardBtn.type = 'button';
+    cardBtn.dataset.sfx = 'toggle';
+    cardBtn.addEventListener('click', () => {
+      const on = !readStatusCard();
+      writeStatusCard(on);
+      director.setStatusCard(on);
+      cardBtn.textContent = on ? '已开启 · 每轮附一张' : '已关闭 · 模型自由发挥';
+      cardHint.hidden = on;
+    });
+    cardRow.appendChild(cardBtn);
+    styleSec.appendChild(cardRow);
+
+    const cardHint = el('p', 'ne-modal-warn',
+      '关闭后引擎不再产出卡片。模型想输出结构化值就输出，不想就没有 —— '
+      + '卡片会变得时有时无，且数值可能与真实状态对不上。');
+    cardHint.hidden = readStatusCard();
+    styleSec.appendChild(cardHint);
+
+    const refField = el('div', 'ne-field');
+    refField.appendChild(el('span', 'ne-field-label', '卡片示例（带 ✓ 的是引擎真值）'));
+    const refBox = el('div', 'ne-card-ref');
+    for (const seg of parseCardMarkup(sampleCardMarkup())) {
+      // sampleCardMarkup 保证模板首尾是非空纯文本段（`[/状态栏]` 落进文本里），
+      // 所以这里只画区块段：文本段是那行闭合标记的残留，画出来是噪音。
+      if (seg.type === 'block') refBox.appendChild(renderBlock(seg, el));
+    }
+    refField.appendChild(refBox);
+    refField.appendChild(el('p', 'ne-card-ref-note',
+      '语法：`[状态栏]` 与 `[/状态栏]` 各占一行，中间一行一项写 `键 = 值`。'
+      + '没有 `=` 的行原样显示成备注。'));
+    styleSec.appendChild(refField);
+
     /* ── 实际发出的系统提示词：只读展示 ──
        玩家有权知道引擎到底对模型说了什么。改它请改上面的旋钮，不在这里手改。 */
     const previewField = el('div', 'ne-field');
-    previewField.appendChild(el('span', 'ne-field-label', '实际发出的系统提示词（只读）'));
+    previewField.appendChild(el('span', 'ne-field-label', '实际发出的系统提示词（只读 · 可选中复制）'));
     previewField.appendChild(previewBox);
     styleSec.appendChild(previewField);
 

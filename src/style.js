@@ -49,13 +49,60 @@ export const LENGTH_OPTIONS = [
   { value: 'unlimited', label: '不限', hint: '不写字数', text: '', inline: '' },
 ];
 
+/**
+ * 叙述者的自称。
+ *
+ * 只改第 1 行「你是互动叙事引擎里的「XX」。」—— 条款、编号、接口约束一律不动。
+ * 这是**称谓**不是**人设**：换一个字，模型对「我是谁」的想象就换一套语域，
+ * 而它该做的事一步没变。
+ */
+export const NARRATOR_OPTIONS = [
+  { value: 'narrator', label: '叙述者', hint: '默认' },
+  { value: 'teahouse', label: '茶馆小二', hint: '说书的口吻' },
+  { value: 'chronicler', label: '记事的', hint: '冷静旁观' },
+  { value: 'custom', label: '自定义', hint: '自己填' },
+];
+
 export const DEFAULT_STYLE = Object.freeze({
   person: 'second',
   lang: 'zh',
   length: 'normal',
+  narrator: 'narrator',
+  narratorCustom: '',
   extra: '',
   locked: true,        // 硬约束开关：开 = 接口条款锁住
 });
+
+const DEFAULT_NARRATOR = '叙述者';
+
+/**
+ * 解析出实际写进提示词的自称。
+ *
+ * 自定义那一档是玩家手填的，因此必须当成**不可信输入**处理：
+ * 换行会把「你是…。」这句话捅穿，后面接的内容直接变成提示词正文；
+ * 书名号会提前闭合 `「」`。两者都清掉，再限长。
+ * 清完为空 → 退回默认，绝不留一个空书名号在提示词里。
+ */
+export function narratorName(style = DEFAULT_STYLE) {
+  const s = normalizeStyle(style);
+  if (s.narrator === 'custom') {
+    const t = sanitizeNarratorName(s.narratorCustom);
+    return t || DEFAULT_NARRATOR;
+  }
+  return NARRATOR_OPTIONS.find(o => o.value === s.narrator)?.label ?? DEFAULT_NARRATOR;
+}
+
+/** 清掉换行 / 书名号 / 控制字符，压掉多余空白，限 12 字 */
+function sanitizeNarratorName(raw) {
+  return String(raw ?? '')
+    .replace(/[\r\n\u2028\u2029]+/g, ' ')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[「」【】《》]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 12);
+}
 
 /**
  * 从选项表里取值，取不到就退回**声明的默认值**。
@@ -76,6 +123,8 @@ export function normalizeStyle(raw = {}) {
     person: pick(PERSON_OPTIONS, raw.person, DEFAULT_STYLE.person).value,
     lang: pick(LANG_OPTIONS, raw.lang, DEFAULT_STYLE.lang).value,
     length: pick(LENGTH_OPTIONS, raw.length, DEFAULT_STYLE.length).value,
+    narrator: pick(NARRATOR_OPTIONS, raw.narrator, DEFAULT_STYLE.narrator).value,
+    narratorCustom: typeof raw.narratorCustom === 'string' ? raw.narratorCustom : '',
     extra: typeof raw.extra === 'string' ? raw.extra : '',
     locked: raw.locked !== false,
   };
@@ -164,7 +213,7 @@ export function composeNarrationSystem(style = DEFAULT_STYLE) {
   for (const c of ALWAYS_CLAUSES) clauses.push(c);
   clauses.sort((a, b) => a.slot - b.slot);
 
-  const lines = ['你是互动叙事引擎里的「叙述者」。', '', '写作要求：'];
+  const lines = [`你是互动叙事引擎里的「${narratorName(s)}」。`, '', '写作要求：'];
   clauses.forEach((c, i) => lines.push(`${i + 1}. ${c.text}`));
 
   if (s.extra.trim()) {

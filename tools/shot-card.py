@@ -49,6 +49,23 @@ CARD = """
   <div class="ne-card-row"><span class="ne-card-note">她今晚不打算走。</span></div>
 </div>
 
+<!-- 引擎真值卡：带 ✓ 的是引擎算的，没带的是模型自己写的 -->
+<div class="ne-card ne-card-stats">
+  <div class="ne-card-head"><span class="ne-card-title">状态栏 · 引擎真值</span></div>
+  <div class="ne-card-row"><span class="ne-card-note">第 3 天 · 深夜</span></div>
+  <div class="ne-card-row"><span class="ne-card-note">自己的住处</span></div>
+  <div class="ne-card-row"><span class="ne-card-key">林晚·信任</span>
+    <div class="ne-card-bar"><i style="width:72%"></i></div>
+    <span class="ne-card-num">72 / 100<span class="ne-truth">✓</span></span></div>
+  <div class="ne-card-row"><span class="ne-card-key">林晚·不安</span>
+    <div class="ne-card-bar"><i style="width:31%"></i></div>
+    <span class="ne-card-num">31 / 100<span class="ne-truth">✓</span></span></div>
+  <div class="ne-card-row"><span class="ne-card-key">已知线索</span>
+    <span class="ne-card-val">3<span class="ne-truth">✓</span></span></div>
+  <div class="ne-card-row"><span class="ne-card-key">模型自填的天气</span>
+    <span class="ne-card-val">转冷</span></div>
+</div>
+
 <div class="ne-card ne-card-list">
   <div class="ne-card-head"><span class="ne-card-title">物品栏</span></div>
   <div class="ne-card-list">

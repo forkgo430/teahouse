@@ -23,7 +23,10 @@ import {
   describeSituation,
   extractChoice,
   cleanNarration,
+  labelForPath,
+  resolveValue,
 } from './narrator.js';
+import { makeStatusCard } from './card.js';
 
 export function createDirector({ world, client = null, onDelta = null, options = {} } = {}) {
   const hasModel = () => Boolean(client?.ready?.());
@@ -35,7 +38,40 @@ export function createDirector({ world, client = null, onDelta = null, options =
     outboundRules: options.outboundRules ?? [],
     promptStack: options.promptStack ?? [],
     narrationStyle: options.narrationStyle ?? null,
+    /* 状态卡：由**引擎**按本轮变化算出卡片标记，交模型原样带回正文。
+       关掉它模型就继续自由发挥（老行为）。 */
+    statusCard: options.statusCard ?? true,
+    /* buildView 由调用方注入 —— director 不 import engine.js（engine 反过来
+       不依赖 director，保持单向）。inject 的写法也让 test 里能塞个 stub。 */
+    buildView: options.buildView ?? null,
   };
+
+  /**
+   * 本轮卡片标记。
+   *
+   * 关键点：**内容是引擎算的，模型只负责搬运。** 卡片一定出现、字段一定
+   * 与数值对得上，而不是"求模型自发输出结构化值"。
+   *
+   * 标 `✓` 的字段是引擎真值；模型若自己在卡片里加了几行（比如临时编一个
+   * 「天气 = 转冷」），那些行没有标记，玩家一眼能分出来。
+   */
+  function statusCardFor(state, report) {
+    if (!settings.statusCard) return '';
+    let view = null;
+    try {
+      view = settings.buildView ? settings.buildView(state) : null;
+    } catch {
+      view = null;   // 视图算不出来不该拖垮叙事
+    }
+    return makeStatusCard({
+      changes: report?.changes ?? [],
+      state,
+      view,
+      world,
+      labelOf: labelForPath,
+      valueOf: resolveValue,
+    });
+  }
 
   /**
    * 把提示词栈装进消息列表。
@@ -277,6 +313,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
           world,
           lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
           style: settings.narrationStyle,
+          statusCard: statusCardFor(state, report),
         });
 
         // 玩家自己的提示词栈（在预设系统提示之下、引擎规则之上）
@@ -321,5 +358,8 @@ export function createDirector({ world, client = null, onDelta = null, options =
      * 正在流的这一段就断了。改一个字段而已，直接写进去。
      */
     setNarrationStyle(style) { settings.narrationStyle = style ?? null; },
+
+    /** 运行期开关状态卡 —— 同 setNarrationStyle，不重建 director */
+    setStatusCard(on) { settings.statusCard = on !== false; },
   };
 }

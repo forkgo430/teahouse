@@ -169,7 +169,7 @@ export function buildChoiceMessages({ brief, situation, event, options, playerIn
  * @param {string} [ctx.lore] 世界书扫出来的相关设定
  * @param {object} [ctx.style] 玩家的文风配置（见 src/style.js）；不传就是默认
  */
-export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style }) {
+export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '' }) {
   const parts = [];
   if (brief) parts.push(`【背景】\n${brief}`);
   parts.push(`【当前局面】\n${situation}`);
@@ -180,6 +180,15 @@ export function buildNarrationMessages({ brief, situation, event, branch, report
 
   const changes = describeChanges(report?.changes ?? [], world);
   if (changes) parts.push(`【已经发生的变化（既成事实，必须与之一致）】\n${changes}`);
+
+  /* 状态卡交给模型带出去 —— 它是**引擎生成的**，模型只负责把它原样放回正文。
+     这样卡片一定出现、字段一定对得上数值，而不是"求模型自发输出结构化值"。 */
+  if (statusCard) {
+    parts.push(
+      '【本轮状态卡（引擎已算好，原样放入正文末尾，一个字都不要改）】\n'
+      + statusCard,
+    );
+  }
 
   parts.push('请写出这一轮的正文。');
 

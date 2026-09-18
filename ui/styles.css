@@ -362,8 +362,7 @@
   }
 
   .ne-main::-webkit-scrollbar-thumb:hover,
-  .ne-drawer::-webkit-scrollbar-thumb:hover {
-    background:
+  .ne-drawer::-webkit-scrollbar-thumb:hover {    background:
       linear-gradient(180deg, rgba(91, 164, 255, 0.6), rgba(91, 164, 255, 0.22))
       padding-box;
   }
@@ -1527,6 +1526,11 @@
     width: min(470px, 100%);
     max-height: 86vh;
     overflow-y: auto;
+    /* 覆盖式滚动条：设置面板内容常常比一屏长（叙述文风展开就 1600px+），
+       留一条常驻的经典滚动条会白占 10px 内容宽；用 overlay 让它
+       压在内容上、不占宽，仍能滚动。 */
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
     border: 1px solid var(--glass-border);
     border-radius: 18px;
     background: var(--shell);
@@ -3174,12 +3178,73 @@
   transition: width 0.42s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* 数值与它的真值方块。
+   不要用 inline-flex —— 数字是**匿名文本节点**，flex 会把它当作匿名 flex item，
+   在 flex-end + 居中下塌出容器（实测 chipLeft 比 numRight 还小 13px，
+   数字跑到方块外面去了）。纯 inline 流 + 一个 margin 就够了。 */
 .ne-card-num {
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--ink-2);
   white-space: nowrap;
+}
+
+/* ── 真值标记 ──
+   引擎算出来的值后面挂一个小方块。模型自填的值没有。
+   颜色之外还有**字形**（✓ 字符就在文本里）—— 色盲、打印、复制到别处都还能分辨。
+
+   不要给它 `flex: none` 配父级 inline-flex：数字是**匿名文本节点**，
+   flex 会把它当匿名 flex item，在 flex-end + 居中下塌出容器
+   （实测方块左边缘比数字右边缘还小 13px，数字整个跑到方块外面）。
+   纯 inline 流 + 一个 margin-left 就够了。 */
+.ne-truth {
+  display: inline-block;
+  margin-left: 5px;
+  min-width: 12px;
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 12px;
+  text-align: center;
+  font-family: var(--sans, system-ui, sans-serif);
+  color: #0d1a12;
+  background: var(--truth, #58c98a);
+  border-radius: 3px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.ne-truth-inline {
+  font-size: 10px;
+  line-height: 1.4;
+  vertical-align: 1px;
+}
+
+/* 参考块：设置里展示"卡片长什么样"。虚框 = 这是样例不是真数据 */
+.ne-card-ref {
+  margin-top: 6px;
+  padding: 4px 6px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm, 8px);
+  background: var(--field, rgba(0, 0, 0, 0.12));
+}
+
+.ne-card-ref > .ne-card { margin: 0; }
+
+.ne-card-ref-note {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--ink-3, var(--ink-2));
+  opacity: 0.85;
+}
+
+.ne-card-ref-note code {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10px;
+  padding: 0 3px;
+  background: var(--paper);
+  border-radius: 3px;
 }
 
 .ne-card-val {
@@ -3444,12 +3509,17 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
   color: var(--ink-3);
 }
 
-/* 只读预览：等宽、可滚、选中色照旧 —— 玩家要能复制出去。
-   故意不做成灰掉的 disabled 观感：它是"给你看的",不是"你不能碰的"。 */
+/* 只读预览。原来是 textarea：`white-space: pre-wrap` 管不住长句 ——
+   单元格先按 <textarea> 的默认 `wrap=soft` 在**可视宽度**处断行，
+   而 width:100% 又撑破了 100% 的格子，于是设置面板横向溢出（截图里能看见）。
+   换成 <pre>：块级元素，pre-wrap 说了算，长中文行按容器宽正常折行。
+   选中色照旧、可聚焦，玩家要能整段复制出去。 */
 .style-preview {
   width: 100%;
   box-sizing: border-box;
-  margin-top: 4px;
+  max-height: 240px;
+  overflow: auto;
+  margin: 4px 0 0;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm, 8px);
@@ -3458,8 +3528,8 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
   font-family: var(--mono, ui-monospace, monospace);
   font-size: 11px;
   line-height: 1.72;
-  resize: vertical;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .style-preview:focus-visible {

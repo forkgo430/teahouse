@@ -34,6 +34,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
     inboundRules: options.inboundRules ?? [],
     outboundRules: options.outboundRules ?? [],
     promptStack: options.promptStack ?? [],
+    narrationStyle: options.narrationStyle ?? null,
   };
 
   /**
@@ -275,6 +276,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
           playerInput: ctx.inbound,
           world,
           lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
+          style: settings.narrationStyle,
         });
 
         // 玩家自己的提示词栈（在预设系统提示之下、引擎规则之上）
@@ -312,5 +314,12 @@ export function createDirector({ world, client = null, onDelta = null, options =
     lorePreview: (state, extra = []) => world.book
       ? scanWorldbook(world.book, { texts: [...extra, ...recentTexts(state)], state, budget: world.loreBudget ?? 1024 })
       : { entries: [], tokens: 0, dropped: [], fired: [] },
+
+    /**
+     * 运行期改文风配置。
+     * 不走「重建 director」那条路 —— 重建会连 onDelta 回调一起丢，
+     * 正在流的这一段就断了。改一个字段而已，直接写进去。
+     */
+    setNarrationStyle(style) { settings.narrationStyle = style ?? null; },
   };
 }

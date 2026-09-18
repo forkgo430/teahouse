@@ -40,6 +40,7 @@ const MODULES = [
   'src/prompts.js',
   'src/regex.js',
   'src/freechat.js',
+  'src/card.js',
   'src/director.js',
   'src/swipe.js',
   'data/demo.js',
@@ -175,6 +176,7 @@ const ICONS = {
   sparkles: 'assets/icons/sparkles.svg',
   history: 'assets/icons/history.svg',
   cup: 'assets/icons/cup.svg',
+  x: 'assets/icons/x.svg',
 };
 
 function inlineAsset(relPath) {

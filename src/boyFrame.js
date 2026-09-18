@@ -81,6 +81,9 @@ export const BOY_FRAME_API = `
       config = d.config || config;
       window.teahouse.meta.mode = config.mode;
       window.teahouse.meta.strict = config.strict !== false;
+      // 宿主在 hello 里带了事件名表，之前一直没接 —— 于是 teahouse.events
+      // 永远是空的，脚本没法枚举/校验事件名。这里补上。
+      if (Array.isArray(d.events)) window.teahouse.events = d.events.slice();
       clearInterval(helloTimer);
       READY = true;
       window.teahouse.meta.ready = true;
@@ -116,8 +119,8 @@ export const BOY_FRAME_API = `
       state:    function () { return call('read', { what: 'state' }).then(pick); },
       turn:     function () { return call('read', { what: 'turn' }).then(pick); },
       actors:   function () { return call('read', { what: 'actors' }).then(pick); },
-      vars:     function () { return call('read', { what: 'vars' }).then(pick); },
-      books:    function () { return call('read', { what: 'books' }).then(pick); },
+      /* 世界书条目，只给结构（id / 标题 / 分栏 / 触发词 / 是否启用），不给正文 */
+      bookEntries: function () { return call('read', { what: 'bookEntries' }).then(pick); },
       world:    function () { return call('read', { what: 'world' }).then(pick); },
     },
 
@@ -179,7 +182,9 @@ export const BOY_FRAME_API = `
 
     /* ── 元信息 ───────────────────────────────────────── */
     meta: { ready: false, mode: 'readonly', strict: true, version: '1.0' },
-    events: {},
+    /* 事件名表。收到宿主的 hello 后填成数组 —— 用 Array 而不是 {}，
+       这样 includes() / length 都自然可用，和宿主发的形状一致。 */
+    events: [],
     __fire: fire,
   };
 

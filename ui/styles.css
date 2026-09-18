@@ -3841,3 +3841,90 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
 
 .ne-boy-logline.is-ok { color: #7fd6a8; }
 .ne-boy-logline.is-no { color: #ffb4b4; }
+
+/* ---- 脚本列表 ---- *
+   一行一份：名字本身就是"跑这份"的按钮，选中那行左边亮一条。 */
+
+.ne-boy-scripts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.ne-boy-script-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* 选中态：亮左边一条，而不是换个底色 —— 底色会和"按钮"抢注意力 */
+.ne-boy-script-row.is-active {
+  border-color: rgba(159, 208, 255, 0.45);
+  background: rgba(79, 158, 255, 0.08);
+  box-shadow: inset 3px 0 0 0 #9fd0ff;
+}
+
+.ne-boy-script-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--ink-2);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ne-boy-script-row.is-active .ne-boy-script-pick {
+  color: #cfe4ff;
+  font-weight: 600;
+}
+
+/* 行内小按钮：不抢"名字"的主次关系 */
+.ne-boy-script-mini {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* 删除按钮待确认时变红 —— 这一下必须看得见，否则两段式等于没有 */
+.ne-boy-script-mini.is-armed {
+  color: #ffb4b4;
+  border-color: rgba(255, 120, 120, 0.5);
+  background: rgba(255, 90, 90, 0.1);
+}
+
+/* 就地展开的改名行 */
+.ne-boy-script-rename {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.ne-boy-script-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(12, 18, 28, 0.6);
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-1);
+}

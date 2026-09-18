@@ -92,6 +92,16 @@ export const WRITABLE = Object.freeze({
 const LOOSE_EXTRA = Object.freeze(['flags.']);
 
 /**
+ * 引擎独占的路径前缀 —— 无论什么档位都不可写。
+ *
+ * `$auto` 是引擎自己算出来的观测值（成就数、撤回次数…），不是内容数据。
+ * 脚本写它等于让自己骗自己：读到的"成就数"会和真实 `achievements` 脱钩，
+ * 而且是**静默**脱钩 —— 引擎下次提交时会把它重算回去，脚本看到的写入
+ * 表面上成功了、实际被覆盖。这种"假成功"比报错难查得多。
+ */
+const ENGINE_OWNED = Object.freeze(['$auto.']);
+
+/**
  * 判断某条路径是否可写。
  * @returns {{ ok: true, rule: object, spec: string } | { ok: false, reason: string }}
  */
@@ -101,6 +111,16 @@ export function writablePath(path, { strict = true } = {}) {
   }
   if (path.startsWith('.') || path.endsWith('.') || path.includes('..')) {
     return { ok: false, reason: `路径写法不合法：${path}` };
+  }
+
+  // 引擎独占的先挡，且不看档位 —— 它不属于"权限"问题，是"你不该有这个能力"
+  for (const prefix of ENGINE_OWNED) {
+    if (path.startsWith(prefix) || path === prefix.slice(0, -1)) {
+      return {
+        ok: false,
+        reason: `${path} 是引擎自己算的观测值，脚本不能写（它每次提交都会重算，写了也会被覆盖）`,
+      };
+    }
   }
 
   for (const [spec, rule] of Object.entries(WRITABLE)) {
@@ -486,14 +506,38 @@ export function createBoy(options = {}) {
     }
   }
 
+  /**
+   * 世界书条目 → 只含结构字段的投影。
+   *
+   * **必须显式挑字段，不能 `...entry` 展开。** 条目里同时住着结构信息
+   * （id / 触发词 / 是否启用 / 插入位置）和正文（`content` 是条目正文，
+   * `secondary` 是副键）。`world` 通道的原则是「只给结构性信息，不给正文」，
+   * 一次展开就会把正文漏出去，而且以后世界书加新正文字段时会**自动**跟着漏 ——
+   * 白名单是唯一能挡住"未来新增字段"的形状。
+   *
+   * `heading` / `category` 给：它们是条目的展示名与分栏标签，本来就显示在
+   * UI 的条目列表里，属于"条目有哪些"这个层面的信息，不是内容本身。
+   */
+  function projectBookEntries(books) {
+    const entries = Array.isArray(books?.entries) ? books.entries : null;
+    if (!entries) return null;
+    return entries.map(e => ({
+      id: e.id,
+      heading: e.heading ?? null,
+      category: e.category ?? null,
+      keys: Array.isArray(e.keys) ? [...e.keys] : [],
+      enabled: e.enabled !== false,
+      constant: e.constant === true,
+    }));
+  }
+
   function readResource(what, h) {
     switch (what) {
       case 'snapshot': return snapshotFor(h.state, h.world, h.view);
       case 'state': return h.state ? structuredClone(h.state) : null;
       case 'turn': return h.state ? (h.state.history ?? []).length + 1 : 0;
       case 'actors': return snapshotFor(h.state, h.world)?.actors ?? [];
-      case 'vars': return h.vars ? structuredClone(h.vars) : {};
-      case 'books': return h.books ? structuredClone(h.books) : null;
+      case 'bookEntries': return projectBookEntries(h.books);
       case 'world': {
         const w = h.world ?? {};
         // 只给结构性信息，不给正文（世界书条目 / 角色描述都不给）
@@ -510,7 +554,7 @@ export function createBoy(options = {}) {
         };
       }
       default:
-        throw new BoyError(`读通道不认识这个资源：${what}（可用：snapshot / state / turn / actors / vars / books / world）`);
+        throw new BoyError(`读通道不认识这个资源：${what}（可用：snapshot / state / turn / actors / bookEntries / world）`);
     }
   }
 
@@ -527,6 +571,10 @@ export function createBoy(options = {}) {
     if (frame) frame.removeAttribute('data-teahouse-boy');
     frame = null;
     listeners.clear();
+    // 解掉 store 订阅：否则小二关着时每次状态变更都白跑一遍
+    //（emit 会因为 config.enabled 为 false 直接返回，但订阅本身还在跑）
+    unbindStore?.();
+    unbindStore = null;
     for (const [, p] of pending) {
       try { p.reject(new BoyError('小二已关闭')); } catch { /* 忽略 */ }
     }
@@ -547,12 +595,47 @@ export function createBoy(options = {}) {
     return () => listeners.get(key)?.delete(fn);
   }
 
+  /**
+   * 把引擎的 store 订阅转成小二事件。**可选** —— 不调它桥照常工作，
+   * 只是脚本收不到 `state:changed`。
+   *
+   * 为什么要宿主显式接一次，而不是在桥里自己轮询：桥拿不到 store
+   * （`host()` 只给状态快照，不给写通道），而订阅必须挂在**唯一提交点**上 ——
+   * 手发会漏（本项目的写入口有十来个）并且顺序不可控。
+   *
+   * 重复绑定会先解掉上一次，免得挂了两份、事件发两遍。
+   *
+   * @param {{ subscribe: (fn) => (() => void) }} store
+   * @returns {() => void} 解绑函数
+   */
+  let unbindStore = null;
+  function bindStore(store) {
+    if (typeof store?.subscribe !== 'function') {
+      throw new BoyError('bindStore 需要带 subscribe 的 store');
+    }
+    unbindStore?.();
+    unbindStore = store.subscribe((meta) => {
+      emit('state:changed', {
+        turn: meta?.turn ?? null,
+        mode: meta?.mode ?? null,
+        // changes 只有 dispatch / commit 给得出；replace / rollback 是整表恢复，
+        // 没有逐条 diff。取不到就给 null —— 脚本该按"状态变了"处理，别指望总有 diff。
+        changes: Array.isArray(meta?.changes)
+          ? meta.changes.map(c => ({ path: c.path, op: c.op, from: c.from, to: c.to, skipped: c.skipped }))
+          : null,
+      });
+    });
+    return () => { unbindStore?.(); unbindStore = null; };
+  }
+
   return {
     attach,
     detach,
     emit,
     setConfig,
     onLocal,
+    /** 把 store 的状态变更接成 state:changed —— 见上方注释，可选 */
+    bindStore,
     getConfig: () => ({ ...config }),
     onMessage,
     get log() { return log.slice(); },

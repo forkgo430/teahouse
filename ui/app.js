@@ -63,6 +63,10 @@ const CARD_KEY = 'ne.mech.statuscard';
    默认关着 —— 一档都不开是刻意的，见 src/boy.js 的头注。 */
 const BOY_KEY = 'ne.boy.config';
 const BOY_SCRIPT_KEY = 'ne.boy.script';
+/* 脚本从"一条"变成"一列表"。旧 key 保留不删 —— 万一迁移有 bug，
+   玩家手写的那段还在原地；只是不再被读。 */
+const BOY_SCRIPTS_KEY = 'ne.boy.scripts';
+const BOY_ACTIVE_KEY = 'ne.boy.activeScript';
 
 function readSoundOn() {
   try {
@@ -367,11 +371,78 @@ function readBoyConfig() {
 function writeBoyConfig(cfg) {
   try { storage?.setItem(BOY_KEY, JSON.stringify(normalizeBoyConfig(cfg))); } catch { /* 忽略 */ }
 }
-function readBoyScript() {
-  try { return storage?.getItem(BOY_SCRIPT_KEY) ?? ''; } catch { return ''; }
+
+/* ---- 小二脚本：一列表 ---- *
+ * 形状：[{ id, name, text }]。id 不用下标 —— 删中间一条会把后面的全串位，
+ * 活动脚本的指向就会悄悄指到别人身上。 */
+
+/** 生成一个不会与现存的重复的 id */
+function newScriptId(list) {
+  const taken = new Set((list ?? []).map(s => s.id));
+  let n = 1;
+  while (taken.has(`s${n}`)) n++;
+  return `s${n}`;
 }
-function writeBoyScript(text) {
-  try { storage?.setItem(BOY_SCRIPT_KEY, String(text ?? '')); } catch { /* 忽略 */ }
+
+/**
+ * 读脚本列表。旧的单条脚本在这里迁移成列表首条。
+ *
+ * 迁移后**不删旧 key**：万一这里的逻辑有 bug，玩家手写的那段还在原地，
+ * 最多是没被读到，而不是没了。代价是 localStorage 里留着一份死数据 ——
+ * 换"数据一定不丢"我觉得值。
+ */
+function readBoyScripts() {
+  let list = [];
+  try {
+    const raw = storage?.getItem(BOY_SCRIPTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed)) {
+      list = parsed
+        .filter(s => s && typeof s === 'object')
+        .map((s, i) => ({
+          id: typeof s.id === 'string' && s.id ? s.id : `s${i + 1}`,
+          name: typeof s.name === 'string' && s.name ? s.name : `脚本 ${i + 1}`,
+          text: typeof s.text === 'string' ? s.text : '',
+        }));
+    }
+  } catch { list = []; }
+
+  if (list.length === 0) {
+    let old = '';
+    try { old = storage?.getItem(BOY_SCRIPT_KEY) ?? ''; } catch { old = ''; }
+    if (old.trim()) {
+      list = [{ id: 's1', name: '我的脚本', text: old }];
+      writeBoyScripts(list);
+    }
+  }
+
+  // id 去重：手改过 localStorage 可能塞进重复 id
+  const seen = new Set();
+  for (const s of list) {
+    if (seen.has(s.id)) s.id = newScriptId([...seen].map(x => ({ id: x })));
+    seen.add(s.id);
+  }
+  return list;
+}
+function writeBoyScripts(list) {
+  try { storage?.setItem(BOY_SCRIPTS_KEY, JSON.stringify(list ?? [])); } catch { /* 忽略 */ }
+}
+function readActiveScriptId() {
+  try { return storage?.getItem(BOY_ACTIVE_KEY) ?? null; } catch { return null; }
+}
+function writeActiveScriptId(id) {
+  try {
+    if (id === null || id === undefined) storage?.removeItem(BOY_ACTIVE_KEY);
+    else storage?.setItem(BOY_ACTIVE_KEY, String(id));
+  } catch { /* 忽略 */ }
+}
+
+/** 当前活动脚本。列表空时返回 null。 */
+function activeScript() {
+  const list = readBoyScripts();
+  if (list.length === 0) return null;
+  const want = readActiveScriptId();
+  return list.find(s => s.id === want) ?? list[0];
 }
 
 function readChatMode() {
@@ -681,8 +752,10 @@ function startMain(root, opts = {}) {
       return {
         state: st,
         world,
-        vars: {},
-        books: null,
+        /* 世界书：只给条目结构（id / 标题 / 分栏 / 触发词 / 是否启用），
+           正文由桥侧的白名单投影剥掉 —— 这里整份传下去是安全的，
+           projectBookEntries 会挑字段。 */
+        books: world.book ?? null,
         places: mode === 'rainnight'
           ? Object.keys(world.placeLabels ?? {})
           : Object.keys(world.placeLabels ?? PLACES ?? {}),
@@ -691,6 +764,11 @@ function startMain(root, opts = {}) {
     },
     apply: (effects) => store.dispatch(effects),
   });
+
+  /* 状态变更 → state:changed。接在 store 的唯一提交点上，而不是手发 ——
+     本文件的写入口有十来个（dispatch / commit / rollback / replace），
+     手发必漏，而且顺序不可控。桥在 detach 时会自己解掉这个订阅。 */
+  boy.bindStore(store);
 
   /* 入站：脚本发来的每一条都得有个收件人。
      挂在 window 上一次就够 —— 桥内部用 frame 比对来认自己的那个 frame，
@@ -3659,6 +3737,8 @@ window.markSeen = async function (key) {
           : c.strict
             ? '可写 + 硬约束：只能改写已声明的路径（数值 / 线索 / 地点），且值必须是字面量。'
             : '可写 + 硬约束关：脚本还能往 flags 里塞任意值。存档里会多出脚本写的东西。';
+      // 列表跟着刷一次：开关改了之后选中态可能要跟着变（关着时整片灰掉）
+      renderScriptList();
       mountFrame();
     }
 
@@ -3667,20 +3747,42 @@ window.markSeen = async function (key) {
     btnWrite.addEventListener('click', () => { cfg.mode = 'write'; syncFromConfig(); });
     btnStrict.addEventListener('click', () => { cfg.strict = !cfg.strict; syncFromConfig(); });
 
+    /* ---- 脚本列表 ---- *
+     * 从"一条脚本"变成"一列表"。列表只决定**跑哪份代码**，
+     * 不影响能力判定 —— 能力仍然只由上面那三个开关决定。 */
+    const listField = el('div', 'ne-field');
+    listField.appendChild(el('span', 'ne-field-label', '你的脚本'));
+    const scriptList = el('div', 'ne-boy-scripts');
+    listField.appendChild(scriptList);
+
+    const listTools = el('div', 'ne-modal-actions');
+    listTools.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;gap:6px;margin-top:6px;';
+    const btnNew = el('button', 'ne-btn', '新建');
+    btnNew.type = 'button';
+    btnNew.dataset.sfx = 'select';
+    listTools.appendChild(btnNew);
+    listField.appendChild(listTools);
+    card.appendChild(listField);
+
     /* ---- 脚本编辑 ---- */
     const scriptField = el('label', 'ne-field');
-    scriptField.appendChild(el('span', 'ne-field-label', '你的脚本（HTML，可含 <script>）'));
+    scriptField.appendChild(el('span', 'ne-field-label', '脚本内容（HTML，可含 <script>）'));
     const ta = el('textarea', 'ne-field-area ne-boy-code');
     ta.rows = 12;
     ta.spellcheck = false;
-    ta.value = readBoyScript() || BOY_SAMPLE;
     ta.placeholder = '写 HTML；用 window.teahouse 读写引擎。';
 
     let saveTimer = null;
     ta.addEventListener('input', () => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
-        writeBoyScript(ta.value);
+        const cur = activeScript();
+        if (!cur) return;
+        const list = readBoyScripts();
+        const hit = list.find(s => s.id === cur.id);
+        if (!hit) return;
+        hit.text = ta.value;
+        writeBoyScripts(list);
         mountFrame();
       }, 600);
     });
@@ -3696,21 +3798,187 @@ window.markSeen = async function (key) {
     btnClear.dataset.sfx = 'dropped';
     btnSample.addEventListener('click', () => {
       ta.value = BOY_SAMPLE;
-      writeBoyScript(BOY_SAMPLE);
+      saveActiveText(BOY_SAMPLE);
       mountFrame();
     });
     btnClear.addEventListener('click', () => {
       ta.value = '';
-      writeBoyScript('');
+      saveActiveText('');
       mountFrame();
     });
     btnReload.addEventListener('click', () => {
-      writeBoyScript(ta.value);
+      saveActiveText(ta.value);
       mountFrame();
     });
     tools.append(btnSample, btnReload, btnClear);
     scriptField.appendChild(tools);
     card.appendChild(scriptField);
+
+    /**
+     * 把文本写回当前活动脚本并持久化。
+     *
+     * **没有活动脚本时先建一个**（而不是静默返回）—— 玩家在空面板里打了字，
+     * 结果什么都没存下来，这种丢失是查不出来的：不报错、不提示，下次打开是空的。
+     * 宁可替他建一份，也别让键盘上的工夫白费。
+     */
+    function saveActiveText(text) {
+      let cur = activeScript();
+      if (!cur) {
+        const list = readBoyScripts();
+        cur = { id: newScriptId(list), name: '我的脚本', text: '' };
+        list.push(cur);
+        writeBoyScripts(list);
+        writeActiveScriptId(cur.id);
+        renderScriptList();
+      }
+      const list = readBoyScripts();
+      const hit = list.find(s => s.id === cur.id);
+      if (!hit) return;
+      hit.text = String(text ?? '');
+      writeBoyScripts(list);
+    }
+
+    /** 切到某条脚本：存下活动 id、回填编辑区、重启帧。 */
+    function selectScript(id) {
+      writeActiveScriptId(id);
+      const cur = activeScript();
+      ta.value = cur ? cur.text : '';
+      renderScriptList();
+      mountFrame();
+    }
+
+    /** 重命名。空名字不接受 —— 那样列表里会出现一条点不中的空行。 */
+    function renameScript(id, name) {
+      const trimmed = String(name ?? '').trim();
+      if (!trimmed) return false;
+      const list = readBoyScripts();
+      const hit = list.find(s => s.id === id);
+      if (!hit) return false;
+      hit.name = trimmed;
+      writeBoyScripts(list);
+      renderScriptList();
+      return true;
+    }
+
+    /**
+     * 删一条。**活动脚本被删时，活动位置落到列表第一条**（按列表顺序取，
+     * 不是"相邻那条"—— 相邻的语义在删首条/末条时会变得难以预料）。
+     * 删光了就把活动 id 清掉，编辑区回填示例、帧显示"小二关着"。
+     */
+    function deleteScript(id) {
+      const list = readBoyScripts().filter(s => s.id !== id);
+      writeBoyScripts(list);
+      const wasActive = readActiveScriptId() === id;
+      if (wasActive) {
+        writeActiveScriptId(list.length > 0 ? list[0].id : null);
+      }
+      const cur = activeScript();
+      ta.value = cur ? cur.text : '';
+      renderScriptList();
+      mountFrame();
+    }
+
+    /** 列表的局部重画。与 syncFromConfig / mountFrame / refreshLog 并列。 */
+    function renderScriptList() {
+      scriptList.innerHTML = '';
+      const list = readBoyScripts();
+      const curId = activeScript()?.id ?? null;
+
+      if (list.length === 0) {
+        scriptList.appendChild(el('p', 'ne-modal-note',
+          '还没有脚本。点「新建」写一份，或者直接在上面那块里写。'));
+        return;
+      }
+
+      for (const s of list) {
+        const row = el('div', 'ne-boy-script-row');
+        row.classList.toggle('is-active', s.id === curId);
+
+        const pick = el('button', 'ne-boy-script-pick', s.name);
+        pick.type = 'button';
+        pick.dataset.sfx = 'select';
+        pick.title = `跑这一份：${s.name}`;
+        pick.addEventListener('click', () => {
+          if (s.id === curId) return;
+          selectScript(s.id);
+        });
+        row.appendChild(pick);
+
+        const btnRename = el('button', 'ne-btn ne-boy-script-mini', '改名');
+        btnRename.type = 'button';
+        btnRename.dataset.sfx = 'select';
+        btnRename.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          // 就地展开输入行，不跳窗 —— 与条目编辑同一个哲学
+          if (row.querySelector('.ne-boy-script-rename')) return;
+          const box = el('div', 'ne-boy-script-rename');
+          const inp = el('input', 'ne-boy-script-input');
+          inp.type = 'text';
+          inp.value = s.name;
+          const ok = el('button', 'ne-btn ne-boy-script-mini', '存');
+          const no = el('button', 'ne-btn ne-boy-script-mini', '算了');
+          ok.type = no.type = 'button';
+          ok.dataset.sfx = 'confirm';
+          no.dataset.sfx = 'back';
+          const commit = () => {
+            if (renameScript(s.id, inp.value)) {
+              appendSystem(`脚本已改名为「${inp.value.trim()}」`, 'info');
+            } else {
+              appendSystem('名字不能是空的', 'warn');
+            }
+          };
+          ok.addEventListener('click', commit);
+          inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); });
+          no.addEventListener('click', () => box.remove());
+          box.append(inp, ok, no);
+          row.appendChild(box);
+          inp.focus();
+          inp.select();
+        });
+        row.appendChild(btnRename);
+
+        const del = el('button', 'ne-btn ne-boy-script-mini', '删除');
+        del.type = 'button';
+        del.dataset.sfx = 'deny';
+        del.title = `删掉这份：${s.name}`;
+        /* 两段式：脚本是手写的代码，删了没处恢复，值得破一次"立即执行"的惯例。
+           第一次点变成确认，4 秒没跟就自己复位。 */
+        let armed = false;
+        let armTimer = null;
+        del.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          if (!armed) {
+            armed = true;
+            del.textContent = '确认删除';
+            del.classList.add('is-armed');
+            armTimer = setTimeout(() => {
+              armed = false;
+              del.textContent = '删除';
+              del.classList.remove('is-armed');
+            }, 4000);
+            return;
+          }
+          clearTimeout(armTimer);
+          deleteScript(s.id);
+          appendSystem(`已删除脚本「${s.name}」`, 'warn');
+        });
+        row.appendChild(del);
+
+        scriptList.appendChild(row);
+      }
+    }
+
+    btnNew.addEventListener('click', () => {
+      const list = readBoyScripts();
+      const fresh = { id: newScriptId(list), name: `脚本 ${list.length + 1}`, text: '' };
+      list.push(fresh);
+      writeBoyScripts(list);
+      writeActiveScriptId(fresh.id);
+      ta.value = '';
+      renderScriptList();
+      mountFrame();
+      appendSystem('新建了一份空脚本。想从示例改起，点「放回示例」。', 'info');
+    });
 
     /* ---- iframe 宿主 ---- */
     const frameWrap = el('div', 'ne-boy-frame');
@@ -3738,7 +4006,8 @@ window.markSeen = async function (key) {
         return;
       }
 
-      const doc = buildBoyDocument(ta.value);
+      const cur = activeScript();
+      const doc = buildBoyDocument(cur ? cur.text : '');
       blobUrl = URL.createObjectURL(new Blob([doc], { type: 'text/html' }));
       const f = document.createElement('iframe');
       f.className = 'ne-boy-iframe';
@@ -3784,6 +4053,11 @@ window.markSeen = async function (key) {
     };
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     btnClose.addEventListener('click', close);
+
+    /* 编辑区回填活动脚本。**没有脚本时留空而不是塞示例** —— 塞了示例会让玩家
+       以为自己已经有了一份，而且他改的内容在没建脚本时会存不下来。
+       想看示例点「放回示例」，那是明确的一次写入。 */
+    ta.value = activeScript()?.text ?? '';
 
     syncFromConfig();
   }

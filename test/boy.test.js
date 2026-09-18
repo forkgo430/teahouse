@@ -445,7 +445,7 @@ test('读通道：认识的资源给出值，不认识的抛并报出可用清�
     setAttribute() {}, removeAttribute() {},
   };
   const boy = createBoy({
-    host: () => ({ state: STATE, world: WORLD, vars: { mood: 'calm' } }),
+    host: () => ({ state: STATE, world: WORLD }),
   });
   boy.setConfig({ enabled: true });
   boy.attach(fakeFrame);
@@ -457,8 +457,13 @@ test('读通道：认识的资源给出值，不认识的抛并报出可用清�
   assert.equal(snap.value.turn, 4, '快照真的送到了');
   assert.equal(snap.value.actors[0].name, '林晚');
 
+  // vars 通道已删：它从前是个写死的空 {}，永远给不出东西 —— 一个骗人的通道。
+  // 现在读它必须抛，且报错里要列出真正可用的那批（别让脚本作者去猜）。
   boy.onMessage({ data: { __teahouse: true, dir: 'read', id: 'b', what: 'vars' }, source: fakeFrame.contentWindow });
-  assert.deepEqual(sent.at(-1).value, { mood: 'calm' });
+  const gone = sent.at(-1);
+  assert.equal(gone.ok, false);
+  assert.match(gone.error, /不认识这个资源：vars/);
+  assert.doesNotMatch(gone.error, /vars \/ books/, '可用清单里不该再出现 vars');
 
   boy.onMessage({ data: { __teahouse: true, dir: 'read', id: 'c', what: 'nope' }, source: fakeFrame.contentWindow });
   const bad = sent.at(-1);
@@ -561,4 +566,159 @@ test('挂上 frame 之后，同样这条消息就会被处理', () => {
   boy.onMessage({ data: { __teahouse: true, dir: 'write', path: 'clues', value: 'X' }, source: live.contentWindow });
   assert.equal(boy.log.length, 1);
   assert.equal(applied, 1);
+});
+
+/* ---------------------------------------------------------------- *
+ * $auto 引擎独占：脚本不能写引擎自己算的观测值
+ * ---------------------------------------------------------------- */
+
+test('$auto 在两种档位下都写不进去', () => {
+  for (const strict of [true, false]) {
+    const r = writablePath('$auto.achievement_count', { strict });
+    assert.equal(r.ok, false, `strict=${strict} 时也不该放行`);
+    assert.match(r.reason, /引擎自己算的观测值/);
+  }
+});
+
+test('$auto 的拒绝理由要说清"写了也会被覆盖"，不是笼统的"不认识"', () => {
+  const r = writablePath('$auto.withdraw_count');
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /重算|覆盖/, '要说明为什么不该写，否则脚本作者会以为是权限没开');
+});
+
+test('$auto 挡的是它自己，不禁掉别的 $ 开头路径', () => {
+  // 挡太宽会误伤。只认 $auto.，别的一律走正常流程
+  const r = writablePath('$other.thing');
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /写通道不认识这个路径/, '应落到兜底拒绝，而不是 $auto 那条专门理由');
+});
+
+test('$auto 整段（不带点）同样被挡', () => {
+  assert.equal(writablePath('$auto').ok, false);
+});
+
+/* ---------------------------------------------------------------- *
+ * bookEntries：只给结构，不给正文
+ * ---------------------------------------------------------------- */
+
+test('projectBookEntries 的字段是白名单，正文一个都不漏', () => {
+  const sent = [];
+  const fakeFrame = {
+    contentWindow: { postMessage: (m) => sent.push(m) },
+    setAttribute() {}, removeAttribute() {},
+  };
+  const boy = createBoy({
+    host: () => ({
+      state: STATE,
+      world: WORLD,
+      books: {
+        entries: [{
+          id: 'W1',
+          heading: '旧公寓的雨',
+          category: '概要',
+          keys: ['雨'],
+          secondary: ['副键'],
+          content: '正文不能出去',
+          constant: false,
+          enabled: true,
+        }],
+      },
+    }),
+  });
+  boy.setConfig({ enabled: true });
+  boy.attach(fakeFrame);
+  boy.onMessage({ data: { __teahouse: true, dir: 'read', id: 'a', what: 'bookEntries' } });
+
+  const list = sent.at(-1).value;
+  assert.equal(list.length, 1);
+  const keys = Object.keys(list[0]).sort();
+  assert.deepEqual(keys, ['category', 'constant', 'enabled', 'heading', 'id', 'keys']);
+  assert.equal(list[0].content, undefined, 'content 是正文，绝不能出去');
+  assert.equal(list[0].secondary, undefined, 'secondary 也是正文');
+});
+
+test('拿不到世界书时 bookEntries 给 null，不抛', () => {
+  const sent = [];
+  const fakeFrame = {
+    contentWindow: { postMessage: (m) => sent.push(m) },
+    setAttribute() {}, removeAttribute() {},
+  };
+  const boy = createBoy({ host: () => ({ state: STATE, world: WORLD }) });
+  boy.setConfig({ enabled: true });
+  boy.attach(fakeFrame);
+  boy.onMessage({ data: { __teahouse: true, dir: 'read', id: 'a', what: 'bookEntries' } });
+  assert.equal(sent.at(-1).ok, true);
+  assert.equal(sent.at(-1).value, null);
+});
+
+/* ---------------------------------------------------------------- *
+ * bindStore：状态变更接成 state:changed
+ * ---------------------------------------------------------------- */
+
+test('bindStore 把 store 的每次提交转成一条 state:changed', () => {
+  const emitted = [];
+  const subs = new Set();
+  const fakeStore = {
+    subscribe: (fn) => { subs.add(fn); return () => subs.delete(fn); },
+  };
+  const boy = createBoy({ host: () => ({ state: STATE, world: WORLD }) });
+  boy.setConfig({ enabled: true });
+  boy.attach({ contentWindow: { postMessage: (m) => emitted.push(m) }, setAttribute() {}, removeAttribute() {} });
+
+  boy.bindStore(fakeStore);
+  assert.equal(subs.size, 1, '订阅真的挂上去了');
+
+  for (const fn of subs) fn({ turn: 5, mode: 'commit', changes: [{ path: 'flags.a', op: 'set', from: false, to: true }] });
+
+  const hits = emitted.filter(m => m.dir === 'emit' && m.type === 'state:changed');
+  assert.equal(hits.length, 1, '必须真的发出去一条，不是"没报错就算过"');
+  assert.equal(hits[0].payload.turn, 5);
+  assert.equal(hits[0].payload.mode, 'commit');
+  assert.equal(hits[0].payload.changes[0].path, 'flags.a');
+});
+
+test('state:changed 在没有 changes 时给 null 而不是空数组', () => {
+  const emitted = [];
+  const subs = new Set();
+  const boy = createBoy({ host: () => ({ state: STATE, world: WORLD }) });
+  boy.setConfig({ enabled: true });
+  boy.attach({ contentWindow: { postMessage: (m) => emitted.push(m) }, setAttribute() {}, removeAttribute() {} });
+  boy.bindStore({ subscribe: (fn) => { subs.add(fn); return () => subs.delete(fn); } });
+
+  for (const fn of subs) fn({ turn: 9, mode: 'rollback', changes: null });
+  const hit = emitted.find(m => m.type === 'state:changed');
+  assert.equal(hit.payload.changes, null, '回滚是整表恢复，没有逐条 diff —— 给 null，别假装有');
+});
+
+test('重复 bindStore 先解掉旧的，事件不发两遍', () => {
+  const emitted = [];
+  const subs = new Set();
+  const store = { subscribe: (fn) => { subs.add(fn); return () => subs.delete(fn); } };
+  const boy = createBoy({ host: () => ({ state: STATE, world: WORLD }) });
+  boy.setConfig({ enabled: true });
+  boy.attach({ contentWindow: { postMessage: (m) => emitted.push(m) }, setAttribute() {}, removeAttribute() {} });
+
+  boy.bindStore(store);
+  boy.bindStore(store);
+  assert.equal(subs.size, 1, '不该挂两份');
+
+  for (const fn of subs) fn({ turn: 1, mode: 'commit' });
+  assert.equal(emitted.filter(m => m.type === 'state:changed').length, 1);
+});
+
+test('detach 会把 store 订阅解掉', () => {
+  const subs = new Set();
+  const boy = createBoy({ host: () => ({ state: STATE, world: WORLD }) });
+  boy.setConfig({ enabled: true });
+  boy.attach({ contentWindow: { postMessage() {} }, setAttribute() {}, removeAttribute() {} });
+  boy.bindStore({ subscribe: (fn) => { subs.add(fn); return () => subs.delete(fn); } });
+  assert.equal(subs.size, 1);
+  boy.detach();
+  assert.equal(subs.size, 0, '小二关了就别再跑订阅');
+});
+
+test('bindStore 收到不带 subscribe 的东西就抛，不静默不接', () => {
+  const boy = createBoy({ host: () => ({ state: STATE }) });
+  assert.throws(() => boy.bindStore({}), /subscribe/);
+  assert.throws(() => boy.bindStore(null), /subscribe/);
 });

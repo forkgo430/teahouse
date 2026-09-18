@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { RAINNIGHT_MODE, RAIN_PATHS, createRainWorld, rainInitialState } from '../data/mode-rain.js';
 import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch } from '../src/engine.js';
 import { createDemoWorld } from '../data/demo.js';
-import { createInitialState, validateEventSet } from '../src/schema.js';
+import { createInitialState, validateEventSet, validateCondition } from '../src/schema.js';
 import { applyEffects, createStore } from '../src/state.js';
 import { evaluate } from '../src/condition.js';
 import {
@@ -569,4 +569,65 @@ test('engine 的白名单也认这两个字段（两层缺一不可）', () => {
   });
   assert.equal(w.rainLevel, 0.5);
   assert.equal(w.rules.consentEnforced, true);
+});
+
+/* ---------------------------------------------------------------- *
+ * 成就条件的可达性
+ *
+ * 这两条曾经是「写得出但永远解锁不了」的死条件：
+ *   A_H07 依赖 flags.withdraw_count —— 计数从来没人累加，恒为缺失 → 恒 false
+ *   A_H05 原文「达成 30 项以上」—— 条件系统当时没有 length，改用「含最难那项」近似
+ * 下面钉住的是**能不能真的走到成立**，不是「条件写得对不对」。
+ * ---------------------------------------------------------------- */
+
+const achievements = () => RAINNIGHT_MODE.world.achievements ?? [];
+
+test('所有成就的 cond 都过 schema 校验', () => {
+  const issues = [];
+  for (const a of achievements()) {
+    validateCondition(a.cond, 'achievements.' + a.id + '.cond', issues);
+  }
+  assert.deepEqual(issues, [], '有成就的条件不合法：' + JSON.stringify(issues));
+});
+
+test('A_H07「三缄其口」：撤回三次后条件真的成立', () => {
+  const a = achievements().find(x => x.id === 'A_H07');
+  assert.ok(a, 'A_H07 不见了');
+
+  let s = initialState();
+  assert.equal(evaluate(a.cond, s), false, '一次都没撤回时不该解锁');
+
+  /* 逐次逼近阈值：两次还不够，第三次才成立 —— 只验「三次成立」
+     会漏掉「一次就成立」这种计数写错（比如用 set 而不是 add）。 */
+  for (let i = 0; i < 2; i++) {
+    s = applyEffects(s, withdrawEffects(s, 'lin', { respected: true })).state;
+    assert.equal(evaluate(a.cond, s), false, '撤回 ' + (i + 1) + ' 次还不该解锁');
+  }
+  s = applyEffects(s, withdrawEffects(s, 'lin', { respected: true })).state;
+  assert.equal(evaluate(a.cond, s), true, '第三次该解锁了');
+});
+
+test('A_H05「达成 30 项以上」：读成就数组长度，29 不解锁 / 30 解锁', () => {
+  const a = achievements().find(x => x.id === 'A_H05');
+  assert.ok(a, 'A_H05 不见了');
+  assert.equal(a.cond.op, 'length', '该用 length 而不是拿某一项近似');
+  assert.equal(a.cond.value.min, 30);
+
+  const withN = (n) => {
+    const s = initialState();
+    s.achievements = Array.from({ length: n }, (_, i) => 'X' + i);
+    return s;
+  };
+  assert.equal(evaluate(a.cond, withN(29)), false, '29 项不该解锁');
+  assert.equal(evaluate(a.cond, withN(30)), true, '30 项该解锁');
+});
+
+test('A_H05 不走 $auto：中途状态里 $auto 还没算，读数组才准', () => {
+  const s = initialState();
+  s.achievements = ['a', 'b', 'c'];
+  assert.equal(evaluate({ path: 'achievements', op: 'length', value: 3 }, s), true);
+  assert.equal(s.$auto.achievement_count, undefined, '未提交时 $auto 里没这个键');
+
+  const store = createStore(s);
+  assert.equal(store.getState().$auto.achievement_count, 3, '提交后 $auto 才追上来');
 });

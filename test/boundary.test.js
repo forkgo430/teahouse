@@ -317,3 +317,47 @@ test('freezeEffects 冻结路线并扣信任', () => {
   assert.equal(next.routes.a, 'frozen');
   assert.equal(next.actors.a.stats.trust, 50 + DEFAULT_SPEC.pesterDelta);
 });
+
+/* ---------------------------------------------------------------- *
+ * 撤回计数
+ *
+ * 雨夜 A_H07「三缄其口」依赖 flags.withdraw_count >= 3。
+ * 计数必须由**撤回这一件事本身**累加，不能靠每个调用方记得加 ——
+ * 漏一处成就就永远解锁不了，而且不报错。所以累加点只有一处：withdrawEffects。
+ * ---------------------------------------------------------------- */
+
+test('撤回一次记一次', () => {
+  const s = consented();
+  const next = applyEffects(s, withdrawEffects(s, 'a', { respected: true })).state;
+  assert.equal(next.flags.withdraw_count, 1);
+});
+
+test('撤回三次记到三（每次都累加，不是只置一次）', () => {
+  let s = consented();
+  for (let i = 0; i < 3; i++) {
+    s = applyEffects(s, withdrawEffects(s, 'a', { respected: true })).state;
+  }
+  assert.equal(s.flags.withdraw_count, 3);
+});
+
+test('纠缠着撤回也照样计数（不因态度少记一次）', () => {
+  const s = consented();
+  const next = applyEffects(s, withdrawEffects(s, 'a', { respected: false })).state;
+  assert.equal(next.flags.withdraw_count, 1);
+});
+
+test('撤回多个角色累加到同一个全局计数', () => {
+  let s = consented();
+  s = applyEffects(s, withdrawEffects(s, 'a', { respected: true })).state;
+  s = applyEffects(s, withdrawEffects(s, 'minor', { respected: true })).state;
+  assert.equal(s.flags.withdraw_count, 2, '成就条件读的是全局计数，就按全局累加');
+});
+
+test('撤回之外的方式不记这个数（重新协商 / 拒绝 都不算撤回）', () => {
+  const s = consented();
+  const re = applyEffects(s, renegotiateEffects(s, 'a', '只谈这栋楼的事')).state;
+  assert.equal(re.flags.withdraw_count, undefined, '重新协商不该被记成撤回');
+
+  const refused = applyEffects(s, refuseEffects(s, 'a').effects).state;
+  assert.equal(refused.flags.withdraw_count, undefined, '一开始就没同意不算撤回');
+});

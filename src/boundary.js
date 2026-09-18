@@ -151,6 +151,13 @@ export function withdrawEffects(state, actorId, options = {}) {
     // 冻结推进，但不注销：路线状态停在 frozen，重新协商后可解冻
     { path: `routes.${actorId}`, op: 'set', value: 'frozen' },
     { path: 'flags.consent_withdrawn', op: 'set', value: true },
+    /* 撤回次数。A_H07「三缄其口」的 cond 写死了这个路径，所以计数必须落在
+       flags.withdraw_count 上（不是 $auto —— 那是给没有可派生源的观测值用的，
+       而这里数据层已经指定了路径，改路径等于改判定）。
+
+       累加放在**这里**而不是调用方：放在 UI 就变成"每个调用点都记得加"，
+       漏一处 A_H07 就永远解锁不了，而且不报错。累加点必须唯一。 */
+    { path: 'flags.withdraw_count', op: 'add', value: 1 },
   ];
 
   if (hasStat(state, actorId, s.trustStat)) {

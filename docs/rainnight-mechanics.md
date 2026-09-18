@@ -106,5 +106,5 @@
 | 3 | 成就 / 结局的正式触发条件 | ✅ 已按 §19 落地，实测数字钉在测试里 |
 | 4 | 成人路线的内容文本 | ⬜ 引擎侧不生成；由用户接入的模型按边界规则产出 |
 | 5 | NPC 自主行动调度器 | ⬜ 见 §3.4 —— 事件数据齐了，缺一层会自行触发的排程 |
-| 6 | 撤回次数计数 | ⬜ `A_H07` 依赖 `flags.withdraw_count`，需 UI 在调用 `withdrawEffects` 时累加，暂不会解锁 |
-| 7 | 成就计数的 length 判定 | ⬜ `A_H05` 原文是「达成 30 项以上」，条件系统缺 length 运算符，现用「含最难那项」近似 |
+| 6 | 撤回次数计数 | ✅ 累加放在 `withdrawEffects` 里（`flags.withdraw_count` +1），**不放在 UI 调用点** —— 累加点必须唯一，漏一处 `A_H07` 就永远解锁不了且不报错。实测：0→1→2→3，`A_H07` 的 cond 在第三次才翻 true |
+| 7 | 成就计数的 length 判定 | ✅ 条件系统已加 `length` 运算符（数值=等于，`{min,max}`=区间）；`A_H05` 改为 `{ path:'achievements', op:'length', value:{min:30} }`，29 不解锁 / 30 解锁。**读数组本身而非 `$auto.achievement_count`** —— 后者只在 store 提交时重算，`applyTurn` 的中途状态里没有 |

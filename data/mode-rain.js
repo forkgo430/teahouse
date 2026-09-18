@@ -4973,12 +4973,14 @@ const ACHIEVEMENTS = [
     { path: 'flags.case_stage', op: '>=', value: 3 },
   ] } },
   { id: 'A_H05', title: '全知者', note: '你几乎看完了所有人的一生。',
-    /* ⚠️ 偏差如实标注：原文条件是「一周目内达成 30 项以上成就」，
-       条件系统没有数组长度的判定符（只有 exists / contains），
-       这里用「已解锁清单里含最难的那一项」近似。要让计数精确，
-       需要给 condition.js 加 length 类运算符 —— 那是引擎层的改动，
-       不在本轮数据补齐范围内，先留在注释里，别假装已经实现。 */
-    cond: { path: 'achievements', op: 'contains', value: 'A_I12D' } },
+    /* 原文「一周目内达成 30 项以上成就」—— 现在按原样实现了。
+
+       用 length 读 achievements 本身，而不是 $auto.achievement_count：
+       后者是提交时重算的派生值，在 applyTurn 的中间态里是滞后一轮的，
+       而这里要判的是"此刻清单有多长"。两者稳态相同，但即时性不同。
+
+       min 取 30 —— 「30 项以上」按含 30 处理。 */
+    cond: { path: 'achievements', op: 'length', value: { min: 30 } } },
   { id: 'A_H06', title: '素', note: '有些空白，是刻意留的。',
     /* 「全程未发生亲密接触」= 这几个推进标记一个都不存在。
        必须带 took_them_in 做前提：否则开局全为 false、取反全为真，

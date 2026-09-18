@@ -66,6 +66,8 @@ export function createAudio(options = {}) {
   };
 
   const buffers = Object.create(null);
+  /** 诊断计数：只读，供产物探针核对「采样到底解码了没」 */
+  const diag = { preloadStarted: 0, decodeOk: 0, decodeFail: 0, notBundled: 0, sampleHits: 0, sampleMisses: 0, lastError: '' };
 
   function isBundled(uri) {
     return typeof uri === 'string' && !uri.startsWith('__');
@@ -79,11 +81,15 @@ export function createAudio(options = {}) {
       buffers[name] = null;
       return null;
     }
+    diag.preloadStarted += 1;
     try {
       const res = await fetch(uri);
       const raw = await res.arrayBuffer();
       buffers[name] = await c.decodeAudioData(raw);
-    } catch {
+      diag.decodeOk += 1;
+    } catch (e) {
+      diag.decodeFail += 1;
+      diag.lastError = String((e && e.message) || e);
       buffers[name] = null;
     }
     return buffers[name];
@@ -94,7 +100,8 @@ export function createAudio(options = {}) {
     const c = ready();
     if (!c || !state.enabled) return true;
     const buf = buffers[name];
-    if (!buf) return false;
+    if (!buf) { diag.sampleMisses += 1; return false; }
+    diag.sampleHits += 1;
     const src = c.createBufferSource();
     const gain = c.createGain();
     gain.gain.value = vol;
@@ -116,6 +123,14 @@ export function createAudio(options = {}) {
     if (c.state === 'suspended') c.resume().catch(() => {});
     preloadAll();
     return true;
+  }
+
+  /** 采样加载进度（诊断用，只读） */
+  function sampleStatus() {
+    const loaded = Object.keys(SAMPLE_URIS).filter(k => buffers[k]);
+    const failed = Object.keys(SAMPLE_URIS).filter(k => buffers[k] === null);
+    const pending = Object.keys(SAMPLE_URIS).filter(k => buffers[k] === undefined);
+    return { loaded, failed, pending, diag: { ...diag } };
   }
 
   function noise() {
@@ -263,6 +278,8 @@ export function createAudio(options = {}) {
     isReady: () => Boolean(ctx),
     isEnabled: () => state.enabled,
     isBgmEnabled: () => state.bgmEnabled,
+    /** 诊断：14 个采样的加载状态与计数（只读快照） */
+    status: sampleStatus,
 
     /** 背景音乐开关（不影响 UI 音效） */
     setBgmEnabled(on) {
@@ -470,6 +487,14 @@ export function createAudio(options = {}) {
     if (playSample('ending', 0.55)) return;
     blip({ freq: 196, endFreq: 392, dur: 1.2, type: 'sine', vol: 0.06 });
   };
+
+  /* 采样是异步解码的，而 preloadAll() 只在第一次 pointerdown / ensureAudio 时开跑。
+     在那之前（以及解码完成前的几百毫秒里）所有按钮都只能拿到合成音 ——
+     于是"点哪儿都响，但都不是采样"，很像是采样没接上。
+     这里在拿到 AudioContext 后立刻预热一遍，把窗口尽量收窄。 */
+  queueMicrotask(() => {
+    if (ready()) preloadAll();
+  });
 
   return api;
 }

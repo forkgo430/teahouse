@@ -405,6 +405,51 @@ test('store 时间线超过上限时丢弃最旧快照', () => {
 });
 
 /* ---------------------------------------------------------------- *
+ * $auto 派生计数
+ * ---------------------------------------------------------------- */
+
+test('$auto.achievement_count 跟随 push achievement 更新', () => {
+  const store = createStore(baseState());
+  assert.equal(store.getState().$auto.achievement_count, 0);
+  store.dispatch([{ path: 'achievements', op: 'push', value: 'A01' }]);
+  assert.equal(store.getState().$auto.achievement_count, 1);
+  store.dispatch([{ path: 'achievements', op: 'push', value: 'A02' }]);
+  assert.equal(store.getState().$auto.achievement_count, 2);
+});
+
+test('rollback 之后 $auto.achievement_count 跟着回退', () => {
+  const store = createStore(baseState());
+  store.dispatch([{ path: 'achievements', op: 'push', value: 'A01' }]);
+  store.dispatch([{ path: 'achievements', op: 'push', value: 'A02' }]);
+  assert.equal(store.getState().$auto.achievement_count, 2);
+  assert.equal(store.rollback(1), true);
+  assert.equal(store.getState().achievements.length, 1);
+  assert.equal(store.getState().$auto.achievement_count, 1, '派生值必须跟着回退，不能沿用当前值');
+  assert.equal(store.rollback(1), true);
+  assert.equal(store.getState().$auto.achievement_count, 0);
+});
+
+test('replace 之后 $auto 从新状态重算', () => {
+  const store = createStore(baseState());
+  store.dispatch([{ path: 'achievements', op: 'push', value: 'A01' }]);
+  assert.equal(store.getState().$auto.achievement_count, 1);
+  const other = baseState();
+  other.achievements = ['A01', 'A02', 'A03'];
+  store.replace(other);
+  assert.equal(store.getState().$auto.achievement_count, 3, '必须从替换后的数组重算');
+  assert.equal(store.depth(), 0);
+});
+
+test('commit 之后 $auto 也从新状态重算', () => {
+  const store = createStore(baseState());
+  const next = baseState();
+  next.achievements = ['A01', 'A02'];
+  store.commit(next);
+  assert.equal(store.getState().$auto.achievement_count, 2);
+  assert.equal(store.depth(), 1, 'commit 要留快照');
+});
+
+/* ---------------------------------------------------------------- *
  * 边界
  * ---------------------------------------------------------------- */
 

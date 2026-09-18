@@ -263,7 +263,22 @@ function brief(v) {
 
 export function createStore(initialState, options = {}) {
   const maxSnapshots = options.maxSnapshots ?? 500;
-  let state = cloneState(initialState);
+  let state;
+
+  /** 所有写入的唯一落地处。派生字段在这里重算，别在别处手改。 */
+  function publish(next) {
+    // 必须无条件克隆：dispatch 传进来的是 applyEffects 已克隆的对象
+    //（见本文件 187 行），但 commit 传进来的是调用方持有的对象，
+    // 不克隆会与之共享引用。
+    const cloned = cloneState(next);
+    cloned.$auto = cloned.$auto ?? {};
+    cloned.$auto.achievement_count = (cloned.achievements ?? []).length;
+    state = cloned;
+  }
+
+  // 初始状态同样经 publish 落地：否则 $auto.achievement_count 要等到第一次写入
+  // 才出现，读初始状态会拿到 undefined。snapshots[0] 存的也是派生后的状态。
+  publish(initialState);
   /** @type {object[]} snapshots[0] 为初始状态，之后每 dispatch 一次追加 */
   const timeline = [cloneState(state)];
 
@@ -277,7 +292,7 @@ export function createStore(initialState, options = {}) {
 
     dispatch(effects) {
       const result = applyEffects(state, effects);
-      state = result.state;
+      publish(result.state);
       pushSnapshot();
       return result;
     },
@@ -286,7 +301,7 @@ export function createStore(initialState, options = {}) {
      * 直接提交一个新状态并留快照（时间推进、引擎接管状态时用，回档仍可用）
      */
     commit(nextState) {
-      state = cloneState(nextState);
+      publish(nextState);
       pushSnapshot();
       return cloneState(state);
     },
@@ -300,9 +315,9 @@ export function createStore(initialState, options = {}) {
       timeline.length = 0;
       if (Array.isArray(snapshots) && snapshots.length > 0) {
         for (const s of snapshots) timeline.push(cloneState(s));
-        state = cloneState(timeline[timeline.length - 1]);
+        publish(timeline[timeline.length - 1]);
       } else {
-        state = cloneState(nextState);
+        publish(nextState);
         timeline.push(cloneState(state));
       }
       return cloneState(state);
@@ -315,7 +330,7 @@ export function createStore(initialState, options = {}) {
       }
       if (timeline.length - 1 < steps) return false;
       timeline.length = timeline.length - steps;
-      state = cloneState(timeline[timeline.length - 1]);
+      publish(timeline[timeline.length - 1]);
       return true;
     },
 

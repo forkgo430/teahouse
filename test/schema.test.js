@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   SCHEMA_VERSION,
   SLOTS,
+  CMP_OPS,
   SchemaError,
   validateEventOnly,
   validateEventSet,
@@ -295,6 +296,37 @@ test('createInitialState 按定义实例化数值', () => {
   assert.equal(s.where, 'entrance');
   assert.deepEqual(s.clues, []);
   assert.deepEqual(s.endings, []);
+});
+
+test('createInitialState 产出带 $auto 键（供引擎派生计数使用）', () => {
+  const s = createInitialState({ actors: [actorDef()], clock: { day: 1, slot: 'night' }, where: 'entrance' });
+  assert.ok('$auto' in s, '$auto 必须是真实键，而不是靠 locate 的隐式创建');
+  assert.ok(Object.prototype.hasOwnProperty.call(s, '$auto'));
+  assert.deepEqual(s.$auto, {});
+});
+
+test('CMP_OPS 包含 length', () => {
+  assert.ok(CMP_OPS.includes('length'));
+});
+
+test('length 的 value 校验：数字或 {min,max}，拒绝其它', () => {
+  const issuesOf = (v) => {
+    const is = [];
+    validateCondition({ path: 'clues', op: 'length', value: v }, 'c', is);
+    return is;
+  };
+
+  assert.equal(issuesOf(3).length, 0, '数字判等合法');
+  assert.equal(issuesOf({ min: 1 }).length, 0, '仅下界合法');
+  assert.equal(issuesOf({ max: 5 }).length, 0, '仅上界合法');
+  assert.equal(issuesOf({ min: 1, max: 5 }).length, 0, '区间合法');
+
+  assert.ok(issuesOf('3').length > 0, '字符串应被拒');
+  assert.ok(issuesOf(NaN).length > 0, 'NaN 应被拒');
+  assert.ok(issuesOf({}).length > 0, '空对象应被拒');
+  assert.ok(issuesOf({ min: 5, max: 1 }).length > 0, 'min > max 应被拒');
+  assert.ok(issuesOf({ foo: 1 }).length > 0, '未知键应被拒');
+  assert.ok(issuesOf({ min: 'x' }).length > 0, '非数字边界应被拒');
 });
 
 test('init 越界被拒', () => {

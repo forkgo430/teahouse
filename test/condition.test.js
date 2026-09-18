@@ -130,12 +130,69 @@ test('比较运算符遇到非数字返回 false', () => {
 });
 
 /* ---------------------------------------------------------------- *
+ * length
+ * ---------------------------------------------------------------- */
+
+test('length：数组长度比较（判等 / 下界 / 上界 / 区间）', () => {
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: 2 }, { a: ['x', 'y'] }), true, '== 判等');
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: 3 }, { a: ['x', 'y'] }), false);
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: { min: 1 } }, { a: ['x', 'y'] }), true, '>= 下界');
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: { min: 3 } }, { a: ['x', 'y'] }), false);
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: { max: 2 } }, { a: ['x', 'y'] }), true, '<= 上界');
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: { max: 1 } }, { a: ['x', 'y'] }), false);
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: { min: 1, max: 2 } }, { a: ['x', 'y'] }), true, '区间内');
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: { min: 3, max: 5 } }, { a: ['x', 'y'] }), false, '区间外');
+});
+
+test('length：字符串长度', () => {
+  const c = { s: 'abcd' };
+  assert.equal(evaluateAtom({ path: 's', op: 'length', value: 4 }, c), true);
+  assert.equal(evaluateAtom({ path: 's', op: 'length', value: { min: 5 } }, c), false);
+  assert.equal(evaluateAtom({ path: 's', op: 'length', value: { max: 4 } }, c), true);
+  assert.equal(evaluateAtom({ path: 's', op: 'length', value: { min: 4 } }, c), true);
+});
+
+test('length：空数组与空字符串为 0', () => {
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: 0 }, { a: [] }), true, '空数组 = 0');
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: 0 }, { a: '' }), true, '空字符串 = 0');
+  assert.equal(evaluateAtom({ path: 'a', op: 'length', value: { min: 1 } }, { a: [] }), false);
+});
+
+test('length 作用在非数组非字符串上返回 false', () => {
+  assert.equal(evaluateAtom({ path: 'n', op: 'length', value: 0 }, { n: 123 }), false, '数字');
+  assert.equal(evaluateAtom({ path: 'o', op: 'length', value: 0 }, { o: {} }), false, '对象');
+  assert.equal(evaluateAtom({ path: 'z', op: 'length', value: 0 }, { z: null }), false, 'null');
+  assert.equal(evaluateAtom({ path: 'b', op: 'length', value: 0 }, { b: true }), false, 'boolean');
+});
+
+test('length：缺失路径返回 false，而不是「长度为 0 为真」', () => {
+  assert.equal(evaluateAtom({ path: 'nope', op: 'length', value: 0 }, {}), false,
+    '若这里为真就破坏了 MISSING_PATH_RULE');
+  assert.equal(evaluateAtom({ path: 'nope.deep', op: 'length', value: { min: 0 } }, {}), false);
+  assert.equal(evaluateAtom({ path: 'nope', op: 'length', value: { max: 5 } }, {}), false);
+});
+
+test('length 的 note 说明长度而非值', () => {
+  const hit = explain({ path: 'a', op: 'length', value: { min: 1 } }, { a: ['x', 'y'] });
+  assert.equal(hit.result, true);
+  assert.match(hit.steps[0].note, /长度 2/);
+
+  const miss = explain({ path: 'a', op: 'length', value: 3 }, { a: ['x', 'y'] });
+  assert.equal(miss.result, false);
+  assert.match(miss.steps[0].note, /长度 2/);
+
+  const bad = explain({ path: 'n', op: 'length', value: 0 }, { n: 123 });
+  assert.equal(bad.result, false);
+  assert.match(bad.steps[0].note, /不是数组或字符串/);
+});
+
+/* ---------------------------------------------------------------- *
  * 缺失路径规则
  * ---------------------------------------------------------------- */
 
 test('缺失路径一律 false（除 exists 外）', () => {
   const c = {};
-  for (const op of ['==', '!=', '>', '>=', '<', '<=', 'contains', 'in']) {
+  for (const op of ['==', '!=', '>', '>=', '<', '<=', 'contains', 'in', 'length']) {
     const cond = op === 'contains' || op === 'in'
       ? { path: 'nope', op, value: ['x'] }
       : { path: 'nope', op, value: 0 };

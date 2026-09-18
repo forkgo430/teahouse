@@ -30,7 +30,7 @@ export const ROUTE_LABELS = Object.freeze({
 export const EFFECT_OPS = ['set', 'add', 'sub', 'mul', 'clamp', 'push', 'pull', 'toggle'];
 
 /** 条件允许的比较运算符 */
-export const CMP_OPS = ['==', '!=', '>', '>=', '<', '<=', 'contains', 'in', 'exists'];
+export const CMP_OPS = ['==', '!=', '>', '>=', '<', '<=', 'contains', 'in', 'exists', 'length'];
 
 /** 分支 unlock 只允许出现的键 */
 export const UNLOCK_KEYS = ['clue', 'flag', 'achievement', 'ending', 'route'];
@@ -59,6 +59,24 @@ const issue = (path, message) => ({ path, message });
 
 function isPlainObject(v) {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * length 的 value：数字（判等）或 { min?, max? } 数值边界（判区间）。
+ * op 只能承载一个字符串，无法同时表达「取长度」与比较方向，
+ * 故方向由 min / max 承载，与 clamp 的 { min, max } 惯例一致。
+ */
+function isValidLengthValue(v) {
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (!isPlainObject(v)) return false;
+  const keys = Object.keys(v);
+  if (keys.length === 0) return false;
+  if (!keys.every(k => k === 'min' || k === 'max')) return false;
+  const { min, max } = v;
+  if (min !== undefined && !(typeof min === 'number' && Number.isFinite(min))) return false;
+  if (max !== undefined && !(typeof max === 'number' && Number.isFinite(max))) return false;
+  if (min !== undefined && max !== undefined && min > max) return false;
+  return true;
 }
 
 function isNonEmptyString(v) {
@@ -177,6 +195,11 @@ export function validateCondition(cond, path, issues) {
 
   if (['contains', 'in'].includes(cond.op) && cond.value === undefined) {
     issues.push(issue(`${path}.value`, `运算符 ${cond.op} 的 value 不能为 undefined`));
+  }
+
+  if (cond.op === 'length' && !isValidLengthValue(cond.value)) {
+    issues.push(issue(`${path}.value`,
+      'length 的 value 必须是有限数字（判等）或 { min?, max? } 的有限数字边界（判区间），且 min ≤ max'));
   }
 }
 
@@ -560,6 +583,11 @@ export function createInitialState(def = {}) {
     clues: [],
     achievements: [],
     endings: [],
+    // 引擎派生计数。与 flags 分开：flags 是玩家/数据的地盘（脚本也能写），
+    // 这里是引擎独占的观测值，不由内容作者填写。
+    // 注：本返回值不经白名单校验，新增字段是合法的 —— 写在 state.js 的
+    //     createStore().publish() 里，由 achievements 重算。
+    $auto: {},
     history: [],
   };
 }

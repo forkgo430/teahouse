@@ -113,6 +113,20 @@ export function evaluateAtom(cond, ctx) {
       return Array.isArray(value) && value.includes(cond.value);
     case 'in':
       return Array.isArray(cond.value) && cond.value.includes(value);
+    case 'length': {
+      // 只对数组和字符串有意义；其它类型（数字 / 对象 / null / boolean）一律 false。
+      // 0 基：空数组与空字符串均为 0。
+      // 注意：缺失路径已在上面被 !found 拦下，这里绝不会收到「长度为 0」的假象。
+      if (!Array.isArray(value) && typeof value !== 'string') return false;
+      const len = value.length;
+      const v = cond.value;
+      if (typeof v === 'number') return isNumber(v) && len === v;
+      if (v === null || typeof v !== 'object') return false;
+      const { min, max } = v;
+      if (isNumber(min) && len < min) return false;
+      if (isNumber(max) && len > max) return false;
+      return isNumber(min) || isNumber(max);
+    }
     default:
       return false;
   }
@@ -178,6 +192,14 @@ export function explain(cond, ctx, state = { steps: [] }) {
     note = found ? `→ ${describe(value)}` : '路径不存在';
   } else if (!found) {
     note = `路径不存在（按 MISSING_PATH_RULE 记为 false）`;
+  } else if (cond.op === 'length') {
+    // 说明的是「长度」而不是「值」，与相邻分支区分开
+    const len = Array.isArray(value) || typeof value === 'string' ? value.length : undefined;
+    if (len === undefined) {
+      note = `${describe(value)} 不是数组或字符串，长度判定不适用`;
+    } else {
+      note = `长度 ${len} ${ok ? '满足' : '不满足'} ${describe(cond.value)}`;
+    }
   } else {
     note = `${describe(value)} ${ok ? '满足' : '不满足'} ${cond.op} ${describe(cond.value)}`;
   }

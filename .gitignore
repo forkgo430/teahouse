@@ -2,3 +2,10 @@ node_modules/
 .DS_Store
 .tmp/
 tmp/
+
+# 改大文件前的手工备份（本项目铁律：改 app.js 前先 cp），不该进库
+*.bak
+*.bak2
+*.bak3
+*.diagbak
+ui/*.bak*

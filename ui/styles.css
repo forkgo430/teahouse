@@ -1466,6 +1466,181 @@
     padding: 7px 10px;
   }
 
+  /* ── 导入结果：三个分区三种版式 ───────────────────────────────
+     形状不同，版式就该不同。三种样式本身也是"我在导什么"的信号：
+       世界书 = 条目账（大数字 + 条目列表）
+       角色卡 = 名片（首字头像 + 数值盘）
+       预设   = 参数表（左右对齐的三行）
+     一律用 :where() 之外的显式类，不靠元素选择器（避免和通用规则抢）。 */
+
+  .ne-import-preview.is-worldbook,
+  .ne-import-preview.is-character,
+  .ne-import-preview.is-preset {
+    border-style: solid;
+  }
+
+  /* ── 版式一：世界书 ── */
+
+  .imp-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+
+  .imp-count {
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 600;
+    color: var(--accent-hi);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .imp-unit { display: flex; flex-direction: column; gap: 1px; margin-right: auto; }
+  .imp-unit-main { font-size: 13px; color: var(--ink); letter-spacing: 0.06em; }
+  .imp-unit-sub { font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  .imp-badge {
+    font-size: 10.5px;
+    padding: 2px 8px;
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    color: var(--ink-2);
+    background: var(--plate-soft);
+  }
+  .imp-badge.is-dim { color: var(--ink-3); }
+
+  .imp-entries { display: flex; flex-direction: column; gap: 3px; }
+
+  .imp-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 7px;
+    background: var(--plate-soft);
+    font-size: 11.5px;
+  }
+
+  .imp-entry-key {
+    flex: 1;
+    color: var(--ink-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .imp-entry-order { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .imp-entry.is-more { justify-content: center; color: var(--ink-3); background: none; }
+
+  /* ── 版式二：角色卡 ── */
+
+  .imp-idcard { display: flex; align-items: center; gap: 11px; margin-bottom: 11px; }
+
+  .imp-avatar {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--accent-hi);
+    background: rgba(79, 158, 255, 0.12);
+    border: 1px solid var(--line-gold);
+  }
+
+  .imp-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .imp-name { font-size: 16px; color: var(--ink); letter-spacing: 0.05em; }
+  .imp-spec { font-size: 10.5px; color: var(--ink-3); }
+
+  .imp-stats { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 9px; }
+
+  .imp-stat {
+    flex: 1 1 0;
+    min-width: 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 9px;
+    border-radius: 9px;
+    background: var(--plate-soft);
+    border: 1px solid var(--line-2);
+  }
+
+  .imp-stat-label { font-size: 10px; color: var(--ink-3); }
+  .imp-stat-val { font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .imp-marks { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 9px; }
+
+  .imp-mark {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 7px;
+    background: rgba(150, 170, 200, 0.08);
+  }
+
+  .imp-mark-k { color: var(--ink-3); }
+  .imp-mark-v { color: var(--ink-2); }
+
+  .imp-quote {
+    margin: 0;
+    padding: 8px 10px 8px 11px;
+    border-left: 2px solid var(--line-gold);
+    border-radius: 0 7px 7px 0;
+    background: var(--plate-soft);
+    font-size: 11.5px;
+    line-height: 1.8;
+    color: var(--ink-2);
+  }
+
+  /* ── 版式三：预设 ── */
+
+  .ne-import-preview.is-preset .imp-head .imp-unit-main {
+    font-size: 15px;
+    letter-spacing: 0.05em;
+  }
+
+  .imp-params {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--line-2);
+    border-radius: 9px;
+    overflow: hidden;
+    margin-bottom: 9px;
+  }
+
+  .imp-param {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    padding: 6px 10px;
+    font-size: 11.5px;
+    background: var(--plate-soft);
+  }
+
+  .imp-param + .imp-param { border-top: 1px solid var(--line-2); }
+  .imp-param-k { color: var(--ink-3); }
+  .imp-param-v { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  .imp-note { margin: 0 0 9px; font-size: 11.5px; color: var(--ink-3); }
+
+  .imp-prompt { display: flex; flex-direction: column; gap: 4px; }
+
+  .imp-prompt-k { font-size: 10.5px; color: var(--ink-3); letter-spacing: 0.06em; }
+
+  .imp-prompt-v {
+    font-size: 11.5px;
+    line-height: 1.8;
+    color: var(--ink-2);
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--plate-soft);
+    border: 1px solid var(--line-2);
+    max-height: 130px;
+    overflow-y: auto;
+  }
+
   .ne-modal-actions {
     display: flex;
     gap: 9px;

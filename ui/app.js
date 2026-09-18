@@ -3210,8 +3210,24 @@ function startMain(root, opts = {}) {
 
     let pending = null;
 
+    /**
+     * 三个分区各自的解析结果，**用三种不同的呈现方式**。
+     *
+     * 为什么不能都用 `ne-import-line` 那一串同样的段落：
+     * 三份内容的**形状本来就不同**，用同一种版式等于把差异抹掉。
+     *
+     *   · 世界书是一张**条目账**：多条、有键、有触发方式、有是否启用
+     *     → 该给"计数 + 前几条预览"，让人一眼看出"这一包有多大、什么路数"
+     *   · 角色卡是**一个人**：一个名字、一段自我介绍、几句开场白、一盘数值
+     *     → 该给"名片"，名字当头，其余围着它排
+     *   · 预设是**一组参数**：采样三件套 + 一段系统提示词
+     *     → 该给"参数表"，左右对齐，一眼看清改了什么
+     *
+     * 三种版式也顺带承担一个作用：**不看标题光看样式就知道自己在导什么**。
+     */
     function describe(result) {
       preview.innerHTML = '';
+      preview.className = 'ne-import-preview';
       pending = null;
 
       if (!result || result.kind === KIND.UNKNOWN) {
@@ -3229,31 +3245,150 @@ function startMain(root, opts = {}) {
         return;
       }
 
-      if (result.kind === KIND.CHARACTER) {
-        preview.appendChild(el('p', 'ne-import-line', `角色卡 · ${result.actor?.name ?? '未命名'}（${result.spec}）`));
-        if (result.greetings.length > 0) preview.appendChild(el('p', 'ne-import-line', `开场白 ${result.greetings.length} 条`));
-        if (result.book.length > 0) preview.appendChild(el('p', 'ne-import-line', `内嵌设定 ${result.book.length} 条`));
-        if (result.meta?.tags?.length) {
-          preview.appendChild(el('p', 'ne-import-line', `标签：${result.meta.tags.join('、')}`));
-        }
-      } else if (result.kind === KIND.PRESET) {
-        preview.appendChild(el('p', 'ne-import-line', `预设 · ${result.name ?? '未命名'}`));
-        const s = result.settings ?? {};
-        const params = [
-          s.temperature !== undefined ? `温度 ${s.temperature}` : null,
-          s.topP !== undefined ? `top_p ${s.topP}` : null,
-          s.maxTokens !== undefined ? `max_tokens ${s.maxTokens}` : null,
-        ].filter(Boolean);
-        if (params.length) preview.appendChild(el('p', 'ne-import-line', `采样：${params.join('，')}`));
-        if (result.systemPrompt) preview.appendChild(el('p', 'ne-import-line', '含系统提示词'));
+      if (result.kind === KIND.WORLDBOOK) {
+        describeWorldbook(result);
+      } else if (result.kind === KIND.CHARACTER) {
+        describeCharacter(result);
       } else {
-        preview.appendChild(el('p', 'ne-import-line', `世界书 · ${result.entries.length} 条`));
-        if (result.meta?.name) preview.appendChild(el('p', 'ne-import-line', `名称：${result.meta.name}`));
-        if (result.meta?.tokenBudget) preview.appendChild(el('p', 'ne-import-line', `预算：${result.meta.tokenBudget} tokens`));
+        describePreset(result);
       }
 
       for (const w of result.warnings) preview.appendChild(el('p', 'ne-modal-warn', w));
       pending = result;
+    }
+
+    /* ── 版式一：世界书 —— 条目账 ───────────────────────────────── */
+
+    function describeWorldbook(result) {
+      preview.classList.add('is-worldbook');
+      const entries = result.entries ?? [];
+
+      /* 启用 / 停用分开数：一份世界书里常有大量停用条目，
+         只报总数会让人以为"导进来一堆要用的东西" */
+      const off = entries.filter(e => e.disable === true || e.enabled === false).length;
+      const on = entries.length - off;
+
+      const head = el('div', 'imp-head');
+      head.appendChild(el('span', 'imp-count', String(entries.length)));
+      const unit = el('div', 'imp-unit');
+      unit.appendChild(el('span', 'imp-unit-main', '条目'));
+      unit.appendChild(el('span', 'imp-unit-sub',
+        off > 0 ? `启用 ${on} · 停用 ${off}` : '全部启用'));
+      head.appendChild(unit);
+      if (result.meta?.name) head.appendChild(el('span', 'imp-badge', result.meta.name));
+      if (result.meta?.tokenBudget) head.appendChild(el('span', 'imp-badge is-dim', `${result.meta.tokenBudget} tokens`));
+      preview.appendChild(head);
+
+      /* 前几条：让人认出"这是哪一包"，而不是只看到一个数字 */
+      const sample = entries.filter(e => e.disable !== true).slice(0, 4);
+      if (sample.length) {
+        const list = el('div', 'imp-entries');
+        for (const e of sample) {
+          const row = el('div', 'imp-entry');
+          const keys = [e.key, e.keysecondary].flat().filter(Boolean).slice(0, 3);
+          row.appendChild(el('span', 'imp-entry-key', keys.length ? keys.join(' / ') : '（无关键词）'));
+          row.appendChild(el('span', 'imp-entry-order', `#${e.order ?? 0}`));
+          list.appendChild(row);
+        }
+        if (entries.length > sample.length) {
+          list.appendChild(el('div', 'imp-entry is-more', `还有 ${entries.length - sample.length} 条…`));
+        }
+        preview.appendChild(list);
+      }
+    }
+
+    /* ── 版式二：角色卡 —— 名片 ─────────────────────────────────── */
+
+    function describeCharacter(result) {
+      preview.classList.add('is-character');
+      const name = result.actor?.name ?? '未命名';
+
+      /* 名片：首字当头，名字与规格并排 —— 一眼看出"这是谁" */
+      const card = el('div', 'imp-idcard');
+      card.appendChild(el('span', 'imp-avatar', name.slice(0, 1)));
+      const who = el('div', 'imp-who');
+      who.appendChild(el('span', 'imp-name', name));
+      who.appendChild(el('span', 'imp-spec', result.spec ?? '未知规格'));
+      card.appendChild(who);
+      preview.appendChild(card);
+
+      /* 数值盘：角色卡自带的那几项（信任 / 情绪 / 戒备），
+         横向铺开 —— 这是导入后玩家最常改的东西 */
+      const stats = result.actor?.stats ?? {};
+      const keys = Object.keys(stats);
+      if (keys.length) {
+        const tray = el('div', 'imp-stats');
+        for (const k of keys) {
+          const cell = el('div', 'imp-stat');
+          cell.appendChild(el('span', 'imp-stat-label', k));
+          cell.appendChild(el('span', 'imp-stat-val', String(stats[k])));
+          tray.appendChild(cell);
+        }
+        preview.appendChild(tray);
+      }
+
+      /* 带过来的附属物：开场白 / 内嵌设定 / 标签，用小块标出来 */
+      const marks = [];
+      if (result.greetings.length > 0) marks.push(['开场白', `${result.greetings.length} 条`]);
+      if (result.book.length > 0) marks.push(['内嵌设定', `${result.book.length} 条`]);
+      if (result.meta?.tags?.length) marks.push(['标签', result.meta.tags.join('、')]);
+      if (marks.length) {
+        const strip = el('div', 'imp-marks');
+        for (const [k, v] of marks) {
+          const m = el('div', 'imp-mark');
+          m.appendChild(el('span', 'imp-mark-k', k));
+          m.appendChild(el('span', 'imp-mark-v', v));
+          strip.appendChild(m);
+        }
+        preview.appendChild(strip);
+      }
+
+      /* 开场白正文：如果有，露第一句 —— 这是"这张卡什么味道"的最快证据 */
+      const first = result.greetings?.[0];
+      if (first) {
+        const quote = el('blockquote', 'imp-quote', first.length > 120 ? `${first.slice(0, 120)}…` : first);
+        preview.appendChild(quote);
+      }
+    }
+
+    /* ── 版式三：预设 —— 参数表 ─────────────────────────────────── */
+
+    function describePreset(result) {
+      preview.classList.add('is-preset');
+      const s = result.settings ?? {};
+
+      const head = el('div', 'imp-head');
+      head.appendChild(el('span', 'imp-unit-main', result.name ?? '未命名预设'));
+      preview.appendChild(head);
+
+      /* 三件套固定三行、左右对齐 —— 参数就该这么看；
+         没给的行不显示（而不是显示"未设置"，那会让人以为被改成了空） */
+      const rows = [
+        ['温度 temperature', s.temperature],
+        ['top_p', s.topP],
+        ['max_tokens', s.maxTokens],
+      ].filter(([, v]) => v !== undefined);
+
+      if (rows.length) {
+        const table = el('div', 'imp-params');
+        for (const [k, v] of rows) {
+          const row = el('div', 'imp-param');
+          row.appendChild(el('span', 'imp-param-k', k));
+          row.appendChild(el('span', 'imp-param-v', String(v)));
+          table.appendChild(row);
+        }
+        preview.appendChild(table);
+      } else {
+        preview.appendChild(el('p', 'imp-note', '这份预设没带采样参数 —— 导入只会覆盖系统提示词。'));
+      }
+
+      if (result.systemPrompt) {
+        const prompt = el('div', 'imp-prompt');
+        prompt.appendChild(el('span', 'imp-prompt-k', '系统提示词'));
+        prompt.appendChild(el('div', 'imp-prompt-v',
+          result.systemPrompt.length > 160 ? `${result.systemPrompt.slice(0, 160)}…` : result.systemPrompt));
+        preview.appendChild(prompt);
+      }
     }
 
     fileInput.addEventListener('change', async () => {

@@ -44,6 +44,8 @@ const MODULES = [
   'src/card.js',
   'src/director.js',
   'src/swipe.js',
+  'src/boy.js',
+  'src/boyFrame.js',
   'data/demo.js',
   'data/mode-rain.js',
   'ui/audio.js',
@@ -325,6 +327,63 @@ ${chunksJoined}
   }
   if (/__(?:ASSET|SND)_[A-Z0-9_]+__/.test(html)) {
     throw new Error('产物里还有未替换的资产占位符');
+  }
+
+  /* 产物自检：内联的脚本里不能出现"看起来像收尾标签"的序列。
+   *
+   * HTML 解析器不认识 JS 的字符串、注释、正则 —— 它在脚本里看到 `<` `/script`
+   * 就当场收尾，剩下的代码全变成页面文本。症状是
+   * `Uncaught SyntaxError: Unexpected identifier 'xxx'`，而报错行号指向一个
+   * 完全无关的数据文件（解析提前终止，行号已经错位）。
+   *
+   * 这个坑是真踩过的：`src/boyFrame.js` 要拼一份给 iframe 用的 HTML 文档，
+   * 里面有收尾标签，于是整个主脚本被截断、页面白屏，
+   * 而 643 项单测全绿（单测看不见 HTML 解析）。
+   *
+   * ⚠️ 别用 `/<script>(...)<\/script>/` 去"取脚本正文再查" —— 那个正则自己
+   * 也会在**第一个**收尾标签处停下（正则同样不认识字符串），于是 offender
+   * 正好落在截断之后，闸门永远不响。本轮就是这么白写了一遍。
+   * 正确做法：把主脚本正文整段切出来（用最后一个收尾标签定位），直接扫。
+   */
+  const MAIN_OPEN = html.indexOf('<script>');
+  const MAIN_CLOSE = html.lastIndexOf('<' + '/script>');
+  if (MAIN_OPEN === -1 || MAIN_CLOSE === -1 || MAIN_CLOSE <= MAIN_OPEN) {
+    throw new Error('产物结构异常：找不到主脚本区间');
+  }
+  const mainBody = html.slice(MAIN_OPEN + '<script>'.length, MAIN_CLOSE);
+  const offender = /<\s*\/\s*script/i.exec(mainBody);
+  if (offender) {
+    const line = html.slice(0, MAIN_OPEN + '<script>'.length + offender.index).split('\n').length;
+    const snippet = mainBody
+      .slice(Math.max(0, offender.index - 70), offender.index + 24)
+      .replace(/\n/g, ' ⏎ ');
+    throw new Error(
+      '内联脚本里出现了收尾标签，HTML 会提前终止脚本（页面白屏、单测却全绿）：\n'
+      + `  产物第 ${line} 行附近：…${snippet}…\n`
+      + "  修法：把它拆开拼，例如 '<' + '/script>'（见 src/boyFrame.js 的 SCRIPT_CLOSE）",
+    );
+  }
+
+  /* 产物自检：文档结构标签必须各出现**一次**。
+   *
+   * `tools/smoke.mjs` 与各探针靠 `html.replace('</html>', ...)` 注入验证代码 ——
+   * replace 打的是**第一个**匹配。产物里一旦出现第二个（哪怕藏在 JS 字符串
+   * 或注释里），注入就打到错的地方，症状是"探针没跑出来"而页面看着正常。
+   *
+   * 本轮就是这么白查了一轮：`src/boyFrame.js` 要拼一份 iframe 用的 HTML 文档，
+   * 里面有收尾标签。修法是拆开拼（见该文件的 SCRIPT_CLOSE / HTML_CLOSE）。
+   */
+  for (const [tag, expect] of [['</html>', 1], ['</head>', 1], ['</body>', 1], ['</script>', 1]]) {
+    const n = html.split(tag).length - 1;
+    if (n !== expect) {
+      const at = html.indexOf(tag);
+      const line = html.slice(0, at).split('\n').length;
+      throw new Error(
+        `产物里 ${tag} 出现了 ${n} 次（应为 ${expect} 次）—— 注入式工具会打错位置：\n`
+        + `  首次出现在第 ${line} 行附近\n`
+        + '  修法：在源码里把它拆开拼，例如 \'<\' + \'/html>\'',
+      );
+    }
   }
 
   const outPath = join(ROOT, OUT);

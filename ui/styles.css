@@ -3576,3 +3576,93 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
 .ne-stat:hover .ne-stat-num { color: var(--accent-hi); }
 
 .ne-chips .ne-chip { cursor: default; }
+
+/* ── 茶馆小二：开关行 · 脚本编辑 · iframe 宿主 ───────────── */
+
+.ne-boy-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+}
+
+.ne-boy-sw {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 标签定宽，三行按钮才对齐成一列 —— 不定宽会随字长左右晃 */
+.ne-boy-sw-label {
+  flex: 0 0 62px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.ne-boy-sw .ne-modal-actions { margin: 0; }
+
+.ne-boy-why {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* 脚本编辑框：等宽 + 不换行折叠，写代码的地方不该被正文风格同化 */
+.ne-boy-code {
+  font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+.ne-boy-frame {
+  margin-top: 4px;
+  min-height: 90px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: rgba(12, 18, 28, 0.5);
+  overflow: hidden;
+}
+
+.ne-boy-iframe {
+  display: block;
+  width: 100%;
+  height: 300px;
+  border: 0;
+}
+
+/* 关着时的占位：虚线框，和导入预览同一套语言 */
+.ne-boy-off {
+  margin: 0;
+  padding: 26px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.ne-boy-log {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ne-boy-logline {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.ne-boy-logline.is-ok { color: #7fd6a8; }
+.ne-boy-logline.is-no { color: #ffb4b4; }

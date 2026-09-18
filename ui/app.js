@@ -46,6 +46,8 @@ import {
   makeStatusCard, makeTruthMark, isTruthMarked, sampleCardMarkup,
 } from '../src/card.js';
 import { applyDisplayOutbound, normalizeRule, SHIPPED_RULES } from '../src/regex.js';
+import { createBoy, normalizeBoyConfig, DEFAULT_BOY, WRITABLE, BOY_EVENTS } from '../src/boy.js';
+import { buildBoyDocument } from '../src/boyFrame.js';
 
 const SWIPE_KEY = 'ne.swipe.count';
 const SOUND_KEY = 'ne.sound.on';
@@ -57,6 +59,10 @@ const BOUNDARY_KEY = 'ne.mech.boundary';
 /* 每轮正文末尾附「状态卡」—— 引擎按本轮变化算出来、交模型原样带回。
    关掉就退回老样子：模型想输出结构化值就输出，不想就算。 */
 const CARD_KEY = 'ne.mech.statuscard';
+/* 茶馆小二：自由模式下开给玩家自己写的脚本的一扇门。
+   默认关着 —— 一档都不开是刻意的，见 src/boy.js 的头注。 */
+const BOY_KEY = 'ne.boy.config';
+const BOY_SCRIPT_KEY = 'ne.boy.script';
 
 function readSoundOn() {
   try {
@@ -351,6 +357,22 @@ const PERSONA_ROLE_KEY = 'ne.persona.role';
 const PERSONA_NAME_KEY = 'ne.persona.name';
 const PERSONA_DESC_KEY = 'ne.persona.desc';
 
+function readBoyConfig() {
+  try {
+    const raw = storage?.getItem(BOY_KEY);
+    return raw ? normalizeBoyConfig(JSON.parse(raw)) : { ...DEFAULT_BOY };
+  } catch { return { ...DEFAULT_BOY }; }
+}
+function writeBoyConfig(cfg) {
+  try { storage?.setItem(BOY_KEY, JSON.stringify(normalizeBoyConfig(cfg))); } catch { /* 忽略 */ }
+}
+function readBoyScript() {
+  try { return storage?.getItem(BOY_SCRIPT_KEY) ?? ''; } catch { return ''; }
+}
+function writeBoyScript(text) {
+  try { storage?.setItem(BOY_SCRIPT_KEY, String(text ?? '')); } catch { /* 忽略 */ }
+}
+
 function readChatMode() {
   try { return storage?.getItem(CHAT_KEY) === 'free' ? 'free' : 'story'; } catch { return 'story'; }
 }
@@ -638,6 +660,47 @@ function startMain(root, opts = {}) {
   const store = createStore(initialStateFor(mode));
   const SAVE_KEY = saveKeyFor(mode);
 
+  /* ── 茶馆小二：宿主侧的桥 ─────────────────────────────────────
+     放在这里是因为它要用 store，而 store 刚建好。
+     `apply` 只做一件事：把脚本提的 effect 交给 store.dispatch ——
+     也就是**和事件走同一条写入路径**。桥自己不碰 state。 */
+  const boyFrameHolder = { el: null };
+  const boy = createBoy({
+    host: () => {
+      const st = store.getState();
+      return {
+        state: st,
+        world,
+        vars: {},
+        books: null,
+        places: mode === 'rainnight'
+          ? Object.keys(world.placeLabels ?? {})
+          : Object.keys(world.placeLabels ?? PLACES ?? {}),
+        view: null,
+      };
+    },
+    apply: (effects) => store.dispatch(effects),
+  });
+
+  /* 入站：脚本发来的每一条都得有个收件人。
+     挂在 window 上一次就够 —— 桥内部用 frame 比对来认自己的那个 frame，
+     所以开面板 / 关面板 / 换脚本都不用重挂。 */
+  window.addEventListener('message', (e) => boy.onMessage(e));
+
+  /* 脚本说"替我说一句" —— 走和真人一模一样的提交路径，不另开一条 */
+  boy.onLocal('request', (d) => {
+    if (!d.text) return;
+    input.value = d.text;
+    submitText();
+  });
+  /* 脚本说"以系统口吻提示一句" —— 不进 history，不碰引擎状态 */
+  boy.onLocal('say', (d) => {
+    appendSystem(d.text, 'info');
+  });
+  boy.onLocal('toast', (d) => {
+    appendSystem(d.text, 'info');
+  });
+
   /* 预设带来的覆盖项：temperature / maxTokens 与系统提示词 */
   let presetOverrides = {};
   let presetSystemPrompt = '';
@@ -769,10 +832,20 @@ function startMain(root, opts = {}) {
 
   const btnSide = iconBtn('状态', 'users');
   const btnImport = iconBtn('导入', 'book');
+  /* 小二只在自由对话下有东西可读（事件驱动下正文是引擎写的）。
+     不做成"灰着"，而是**整块不出现** —— 免得玩家点开一个永远空的抽屉。 */
+  const btnBoy = iconBtn('小二', 'sparkles');
+  btnBoy.dataset.sfx = 'toggle';
+  btnBoy.hidden = readChatMode() !== 'free';
   const btnGear = iconBtn('设置', 'settings');
   btnGear.dataset.sfx = 'toggle';        // 面板开合音
 
-  topbar.append(brand, spacer, btnSide, btnImport, btnGear);
+  topbar.append(brand, spacer, btnBoy, btnSide, btnImport, btnGear);
+
+  /** 切换推进方式之后要把小二按钮的显隐一起刷新 */
+  function syncBoyButton() {
+    btnBoy.hidden = readChatMode() !== 'free';
+  }
 
   /* 右缘把手：平时是一个小圆点，hover 拉成胶囊显示「书架」。
      原本书架只能靠"鼠标贴到右缘"唤出，没有可见入口 —— 触屏与新手都摸不到。 */
@@ -2294,6 +2367,7 @@ function startMain(root, opts = {}) {
       b.addEventListener('click', () => {
         writeChatMode(v);
         drvRow.querySelectorAll('button').forEach(x => x.classList.toggle('ne-btn-primary', x.textContent === label));
+        syncBoyButton();
         appendSystem(`推进方式已切到「${label}」${v === 'free' ? ' —— 记得接入模型' : ''}`, 'good');
       });
       drvRow.appendChild(b);
@@ -2602,6 +2676,16 @@ function startMain(root, opts = {}) {
       }
       choices.appendChild(btn);
     });
+
+    /* 小二：选项已经画在屏幕上了，脚本现在读到的东西与玩家看到的一致。
+       放在这里而不是 render() 里，是因为"有选项"才是脚本真正关心的时点。 */
+    const st = store.getState();
+    boy.emit('turn:ready', {
+      turn: (st.history ?? []).length + 1,
+      clock: st.clock ? { day: st.clock.day, slot: st.clock.slot } : null,
+      where: st.where,
+      options: opened.options.map(o => ({ key: o.key, label: o.label, available: !!o.available })),
+    });
   }
 
   /* ---------------------------------------------------------------- *
@@ -2754,6 +2838,23 @@ function startMain(root, opts = {}) {
       render();
 
       const branch = event.branches.find(b => b.key === report.branchKey);
+
+      /* 小二：这一轮落库了。
+         轮号从**落库后的 history 长度**取，不从 report 里取 ——
+         report 没有轮号字段，现推一个比编一个可靠。 */
+      boy.emit('turn:finished', {
+        turn: (after.history ?? []).length,
+        eventId: event.id,
+        branchKey: report.branchKey,
+        changes: (report.changes ?? []).map(c => ({ path: c.path, from: c.from, to: c.to })),
+      });
+      for (const a of report.achievements ?? []) {
+        boy.emit('achievement:unlocked', { id: a.id, name: a.title ?? a.id });
+      }
+      /* report.ending 是 {id,title} 对象，不是 id 字符串 */
+      if (report.ending) {
+        boy.emit('ending:reached', { id: report.ending.id, name: report.ending.title ?? report.ending.id });
+      }
 
       const notices = [];
       if (report.achievements.length > 0) {
@@ -2912,6 +3013,11 @@ function startMain(root, opts = {}) {
       store.commit(after);
       render();
       audio.settles();
+
+      /* 小二：自由对话这一轮的两条都广播出去。
+         顺序是"玩家先、模型后"，与真人看到的一致。 */
+      boy.emit('free:submitted', { turn: entry.turn, text });
+      boy.emit('free:replied', { turn: entry.turn, text: res.text, segments: res.segments });
     } catch (e) {
       appendSystem(`自由对话出错：${e.message}`, 'warn');
     } finally {
@@ -2936,6 +3042,7 @@ function startMain(root, opts = {}) {
   }
 
   btnSide.addEventListener('click', () => toggle(drawerLeft, 'has-left', btnSide));
+  btnBoy.addEventListener('click', openBoy);
   btnGear.addEventListener('click', () => {
     openSettingsModal();
   });
@@ -3191,6 +3298,277 @@ function startMain(root, opts = {}) {
     });
 
     btnClose.addEventListener('click', close);
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 茶馆小二 —— 自由模式下开给玩家脚本的那扇门
+   *
+   * 只在「自由对话」下出现：事件驱动模式下正文是引擎写的，脚本没有可读的东西。
+   *
+   * 三个开关一级比一级紧（总开关 → 读写档 → 硬约束），默认全关。
+   * 这个面板**不提供"允许任意 JS" 的选项** —— 桥本身有清单（src/boy.js），
+   * 脚本拿不到宿主 window / document，所以这里管的是"给多少"，不是"防不防"。
+   * ---------------------------------------------------------------- */
+
+  /** 示例脚本：一份能立刻看出"桥确实是通的"的最小 LOOSE-END 演示 */
+  const BOY_SAMPLE = `<!-- 茶馆小二示例：读引擎真值 + 画一张卡 + 被允许时改一个值 -->
+<div id="panel">
+  <div class="row"><span>第</span><b id="day">—</b><span>天</span>
+    <span id="slot" class="dim"></span><span id="where" class="dim"></span></div>
+  <div id="stats"></div>
+</div>
+<div id="log" class="dim"></div>
+
+<script>
+teahouse.on('ready', async function () {
+  var snap = await teahouse.read.snapshot();
+  document.getElementById('day').textContent = snap.turn;
+  document.getElementById('slot').textContent = snap.slotLabel || '';
+  document.getElementById('where').textContent = snap.whereLabel || '';
+
+  /* 画数值条：分母从 bounds 里取，不猜 */
+  var box = document.getElementById('stats');
+  (snap.actors || []).forEach(function (a) {
+    Object.keys(a.stats || {}).forEach(function (k) {
+      var v = a.stats[k];
+      var b = (a.bounds || {})[k] || { min: 0, max: 100 };
+      var pct = Math.max(0, Math.min(100, (v - b.min) / (b.max - b.min) * 100));
+      var row = document.createElement('div');
+      row.className = 'stat';
+      row.innerHTML = '<span class="nm"></span><span class="bar"><i></i></span><b class="vv"></b>';
+      row.querySelector('.nm').textContent = a.name + '·' + k;
+      row.querySelector('i').style.width = pct.toFixed(1) + '%';
+      row.querySelector('.vv').textContent = v;
+      box.appendChild(row);
+    });
+  });
+});
+
+/* 引擎推来时挂一条 */
+teahouse.on('turn:finished', function (p) {
+  document.getElementById('log').textContent =
+    '第 ' + p.turn + ' 轮已落库，改了 ' + ((p.changes || []).length) + ' 处';
+});
+
+/* 可写档 + 硬约束关掉时，才能往 flags 里记东西。
+   锁着的话这里会抛，错误会显示在帧底部的红框里 —— 那正是我们想要的效果。 */
+window.markSeen = async function (key) {
+  try {
+    await teahouse.write.set('flags.' + key, true);
+    return '已记下 ' + key;
+  } catch (e) {
+    return '记不了：' + e.message;
+  }
+};
+<\/script>
+
+<style>
+  #panel { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: baseline; gap: 5px; font-size: 12px;
+         color: rgba(200, 215, 235, .75); }
+  .row b { font-size: 15px; color: #9fd0ff; font-variant-numeric: tabular-nums; }
+  .dim { color: rgba(200, 215, 235, .5); }
+  .stat { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; }
+  .stat .nm { flex: 0 0 auto; color: rgba(210, 224, 242, .8); }
+  .stat .bar { flex: 1 1 auto; height: 5px; border-radius: 3px;
+               background: rgba(255, 255, 255, .1); overflow: hidden; }
+  .stat .bar i { display: block; height: 100%; border-radius: 3px;
+                 background: linear-gradient(90deg, #4f9eff, #7bd4ff); }
+  .stat .vv { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: #cfe4ff; }
+  #log { margin-top: 6px; font-size: 11.5px; }
+</style>
+`;
+
+  function openBoy() {
+    const cfg = readBoyConfig();
+    const overlay = el('div', 'ne-modal');
+    const card = el('div', 'ne-modal-card');
+    card.appendChild(el('h2', 'ne-modal-title', '茶馆小二'));
+    card.appendChild(el('p', 'ne-modal-note',
+      '自由对话模式下，可以让你自己写的脚本读引擎状态、画自己的界面；'
+      + '打开写通道后它也能改数值 —— 但仍然走引擎的写入通道，留痕与夹紧照常。'));
+
+    /* ---- 三个开关 ---- */
+    const sw = el('div', 'ne-boy-switches');
+
+    const rowMain = el('div', 'ne-boy-sw');
+    const btnMain = el('button', `ne-btn${cfg.enabled ? ' ne-btn-primary' : ''}`, cfg.enabled ? '已开启' : '已关闭');
+    btnMain.type = 'button';
+    btnMain.dataset.sfx = 'toggle';
+    rowMain.appendChild(el('span', 'ne-boy-sw-label', '小二'));
+    rowMain.appendChild(btnMain);
+    sw.appendChild(rowMain);
+
+    const rowMode = el('div', 'ne-boy-sw');
+    const modeRow = el('div', 'ne-modal-actions');
+    modeRow.style.cssText = 'justify-content:flex-start;gap:6px;';
+    const btnRead = el('button', `ne-btn${cfg.mode === 'readonly' ? ' ne-btn-primary' : ''}`, '只读');
+    const btnWrite = el('button', `ne-btn${cfg.mode === 'write' ? ' ne-btn-primary' : ''}`, '可写');
+    btnRead.type = btnWrite.type = 'button';
+    btnRead.dataset.sfx = btnWrite.dataset.sfx = 'select';
+    modeRow.append(btnRead, btnWrite);
+    rowMode.appendChild(el('span', 'ne-boy-sw-label', '读写档'));
+    rowMode.appendChild(modeRow);
+    sw.appendChild(rowMode);
+
+    const rowStrict = el('div', 'ne-boy-sw');
+    const btnStrict = el('button', 'ne-btn', cfg.strict ? '硬约束 · 开' : '硬约束 · 关');
+    btnStrict.type = 'button';
+    btnStrict.dataset.sfx = 'toggle';
+    rowStrict.appendChild(el('span', 'ne-boy-sw-label', '硬约束'));
+    rowStrict.appendChild(btnStrict);
+    sw.appendChild(rowStrict);
+
+    const why = el('p', 'ne-boy-why');
+    sw.appendChild(why);
+    card.appendChild(sw);
+
+    /** 开关改了之后同步给桥、刷新按钮与说明。**只有这套开关决定能力，没有第二处。 */
+    function syncFromConfig() {
+      const c = boy.setConfig(cfg);
+      writeBoyConfig(c);
+      btnMain.textContent = c.enabled ? '已开启' : '已关闭';
+      btnMain.classList.toggle('ne-btn-primary', c.enabled);
+      btnRead.classList.toggle('ne-btn-primary', c.mode === 'readonly');
+      btnWrite.classList.toggle('ne-btn-primary', c.mode === 'write');
+      btnStrict.textContent = c.strict ? '硬约束 · 开' : '硬约束 · 关';
+      btnStrict.classList.toggle('ne-btn-primary', c.strict);
+      btnWrite.disabled = !c.enabled;
+      btnStrict.disabled = !c.enabled || c.mode !== 'write';
+      why.textContent = !c.enabled
+        ? '关着的时候脚本不加载，它拿不到任何东西。'
+        : c.mode === 'readonly'
+          ? '只读：脚本能读状态、能订阅事件、能在自己那块画东西。写通道不存在。'
+          : c.strict
+            ? '可写 + 硬约束：只能改写已声明的路径（数值 / 线索 / 地点），且值必须是字面量。'
+            : '可写 + 硬约束关：脚本还能往 flags 里塞任意值。存档里会多出脚本写的东西。';
+      mountFrame();
+    }
+
+    btnMain.addEventListener('click', () => { cfg.enabled = !cfg.enabled; syncFromConfig(); });
+    btnRead.addEventListener('click', () => { cfg.mode = 'readonly'; syncFromConfig(); });
+    btnWrite.addEventListener('click', () => { cfg.mode = 'write'; syncFromConfig(); });
+    btnStrict.addEventListener('click', () => { cfg.strict = !cfg.strict; syncFromConfig(); });
+
+    /* ---- 脚本编辑 ---- */
+    const scriptField = el('label', 'ne-field');
+    scriptField.appendChild(el('span', 'ne-field-label', '你的脚本（HTML，可含 <script>）'));
+    const ta = el('textarea', 'ne-field-area ne-boy-code');
+    ta.rows = 12;
+    ta.spellcheck = false;
+    ta.value = readBoyScript() || BOY_SAMPLE;
+    ta.placeholder = '写 HTML；用 window.teahouse 读写引擎。';
+
+    let saveTimer = null;
+    ta.addEventListener('input', () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        writeBoyScript(ta.value);
+        mountFrame();
+      }, 600);
+    });
+    scriptField.appendChild(ta);
+
+    const tools = el('div', 'ne-modal-actions');
+    tools.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;gap:6px;margin-top:8px;';
+    const btnSample = el('button', 'ne-btn', '放回示例');
+    const btnClear = el('button', 'ne-btn', '清空');
+    const btnReload = el('button', 'ne-btn', '重新加载');
+    btnSample.type = btnClear.type = btnReload.type = 'button';
+    btnSample.dataset.sfx = btnReload.dataset.sfx = 'select';
+    btnClear.dataset.sfx = 'dropped';
+    btnSample.addEventListener('click', () => {
+      ta.value = BOY_SAMPLE;
+      writeBoyScript(BOY_SAMPLE);
+      mountFrame();
+    });
+    btnClear.addEventListener('click', () => {
+      ta.value = '';
+      writeBoyScript('');
+      mountFrame();
+    });
+    btnReload.addEventListener('click', () => {
+      writeBoyScript(ta.value);
+      mountFrame();
+    });
+    tools.append(btnSample, btnReload, btnClear);
+    scriptField.appendChild(tools);
+    card.appendChild(scriptField);
+
+    /* ---- iframe 宿主 ---- */
+    const frameWrap = el('div', 'ne-boy-frame');
+    const frameHint = el('p', 'ne-modal-note',
+      '下面是脚本真实的运行处。它拿不到茶馆的界面，只能在自己这块里画。');
+    card.appendChild(frameHint);
+    card.appendChild(frameWrap);
+
+    const logBox = el('div', 'ne-boy-log');
+    card.appendChild(logBox);
+
+    /** 构造 / 重建 iframe。
+     *  用 blob URL 而不是 srcdoc：脚本里要能 `<script src>` 引外部模块，
+     *  srcdoc 下相对路径会解析到宿主、且 import 会因 opaque origin 失败。
+     *  blob 是本地对象，不产生任何外部请求，单文件产物性质不变。 */
+    let blobUrl = null;
+    function mountFrame() {
+      frameWrap.innerHTML = '';
+      boy.detach();
+      boyFrameHolder.el = null;
+      if (blobUrl) { try { URL.revokeObjectURL(blobUrl); } catch { /* 忽略 */ } blobUrl = null; }
+
+      if (!cfg.enabled) {
+        frameWrap.appendChild(el('p', 'ne-boy-off', '小二关着。打开上面的开关，脚本才开始跑。'));
+        return;
+      }
+
+      const doc = buildBoyDocument(ta.value);
+      blobUrl = URL.createObjectURL(new Blob([doc], { type: 'text/html' }));
+      const f = document.createElement('iframe');
+      f.className = 'ne-boy-iframe';
+      f.setAttribute('sandbox', 'allow-scripts');
+      f.setAttribute('referrerpolicy', 'no-referrer');
+      f.src = blobUrl;
+      f.addEventListener('load', () => {
+        boy.attach(f);
+        boyFrameHolder.el = f;
+        refreshLog();
+      });
+      frameWrap.appendChild(f);
+    }
+
+    function refreshLog() {
+      const lines = boy.log.slice(-6);
+      logBox.innerHTML = '';
+      if (!lines.length) {
+        logBox.appendChild(el('p', 'ne-modal-note', '脚本还没有写过东西。'));
+        return;
+      }
+      for (const l of lines) {
+        logBox.appendChild(el('p', `ne-boy-logline ${l.ok ? 'is-ok' : 'is-no'}`,
+          `${l.ok ? '✓' : '✕'} ${l.path} —— ${l.ok ? '已落库' : l.reason}`));
+      }
+    }
+
+    const actions = el('div', 'ne-modal-actions');
+    const btnClose = el('button', 'ne-btn ne-btn-primary', '关闭');
+    btnClose.type = 'button';
+    btnClose.dataset.sfx = 'closePanel';
+    actions.appendChild(btnClose);
+    card.appendChild(actions);
+
+    overlay.appendChild(card);
+    root.appendChild(overlay);
+
+    const close = () => {
+      if (blobUrl) { try { URL.revokeObjectURL(blobUrl); } catch { /* 忽略 */ } blobUrl = null; }
+      boy.detach();
+      boyFrameHolder.el = null;
+      overlay.remove();
+    };
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    btnClose.addEventListener('click', close);
+
+    syncFromConfig();
   }
 
   btnImport.addEventListener('click', openImport);

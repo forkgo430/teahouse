@@ -23,8 +23,8 @@ import { createStore, applyEffects, hashState } from '../src/state.js';
 import { exportStore, importToStore, SaveError } from '../src/save.js';
 import { createClient, readConfig, writeConfig, clearConfig } from '../src/llm.js';
 import { createDirector } from '../src/director.js';
-import { labelForPath, resolveValue } from '../src/narrator.js';
-import { defaultStack, buildSystemMessage } from '../src/prompts.js';
+import { labelForPath, resolveValue, NARRATION_SYSTEM } from '../src/narrator.js';
+import { defaultStack, buildSystemMessage, assembleStack } from '../src/prompts.js';
 import { budgetStatus } from '../src/context.js';
 import { importAny, importAs, importPngCard, KIND } from '../src/importers.js';
 import { createWorldbook, updateEntry, removeEntry } from '../src/worldbook.js';
@@ -33,6 +33,8 @@ import { DEFAULT_VARIANT_COUNT, MAX_VARIANTS, variantsOf, swipeState, stepVarian
 import { createAtmosphere } from './atmosphere.js';
 import { attachFluidShader, TEA_FLUID_PARAMS } from './fluid.js';
 import { createAudio } from './audio.js';
+import { hasCardMarkup, renderBlock, renderInlineInto, parseCardMarkup } from '../src/card.js';
+import { applyDisplayOutbound, normalizeRule, SHIPPED_RULES } from '../src/regex.js';
 
 const SWIPE_KEY = 'ne.swipe.count';
 const SOUND_KEY = 'ne.sound.on';
@@ -152,6 +154,26 @@ function writeJson(key, val) {
   } catch {
     /* 只用在本轮 */
   }
+}
+
+/**
+ * 正则规则的首次装载。
+ *
+ * `readJson` 的 fallback 分不清「从没装过」与「装过但删空了」—— 两者都是 null/[]。
+ * 但这两件事必须区别对待：前者要给出厂规则（空面板让人无从下手），
+ * 后者要尊重玩家的删除（否则删了又回来，成了甩不掉的牛皮癣）。
+ *
+ * 判据是**键存在与否**，不是值。
+ */
+function seedRegexRules(store) {
+  let raw;
+  try { raw = store?.getItem(REGEX_KEY); } catch { raw = null; }
+  if (raw != null) {
+    try { return JSON.parse(raw) ?? []; } catch { return []; }
+  }
+  const seeded = SHIPPED_RULES.map(r => JSON.parse(JSON.stringify(r)));
+  try { store?.setItem(REGEX_KEY, JSON.stringify(seeded)); } catch { /* 本轮可用即可 */ }
+  return seeded;
 }
 
 const ROUTE_LABEL = {
@@ -638,8 +660,11 @@ function startMain(root, opts = {}) {
   let client = createClient(config);
   let variantCount = readSwipeCount();
   let contextBudget = readJson(CTX_KEY, 6000);
-  let promptStack = readJson(STACK_KEY, null) ?? defaultStack('');
-  let regexRules = readJson(REGEX_KEY, []);
+  let promptStack = readJson(STACK_KEY, null) ?? defaultStack(NARRATION_SYSTEM);
+  /* 正则：区分「从没装过」与「装过但删空了」。
+     前者给一份出厂规则（否则面板一片空白，玩家不知道规则长什么样），
+     后者尊重玩家的删除 —— 不把规则塞回来。 */
+  let regexRules = seedRegexRules(storage);
   let liveTarget = null;
   let busy = false;
   let currentTurn = null;
@@ -661,6 +686,8 @@ function startMain(root, opts = {}) {
         recentKeep: 4,
         inboundRules: regexRules,
         outboundRules: regexRules,
+        /* 提示词栈必须真的装配进消息 —— 只存不读等于给玩家一个假开关 */
+        promptStack,
       },
     });
   }
@@ -878,10 +905,10 @@ function startMain(root, opts = {}) {
       if (seg.speaker) {
         const row = el('div', 'ne-seg');
         row.appendChild(el('span', 'ne-seg-name', seg.speaker));
-        row.appendChild(el('p', 'ne-msg-text', seg.text));
+        row.appendChild(textBox(seg.text));
         box.appendChild(row);
       } else {
-        box.appendChild(el('p', 'ne-msg-text', seg.text));
+        box.appendChild(textBox(seg.text));
       }
     }
 
@@ -905,13 +932,48 @@ function startMain(root, opts = {}) {
     head.appendChild(el('span', 'ne-msg-meta', `第 ${record.day} 天 · ${slot} · ${branch?.label ?? record.branchKey}`));
     box.appendChild(head);
 
-    box.appendChild(el('p', 'ne-msg-text', record.text ?? branch?.text ?? ''));
+    box.appendChild(textBox(record.text ?? branch?.text ?? ''));
 
     const deltas = deltaPanel(record.changes);
     if (deltas) box.appendChild(deltas);
 
     if (swipeState(record).canSwipe) box.appendChild(swipeBar(record, index));
     return box;
+  }
+
+  /* ── 正文渲染：结构化标记 → 组件 ────────────────────────────
+     模型输出里可以出现声明式标记（[状态栏] 键 = 值 [/状态栏]、
+     行内 [签:…] / [条:键|值|上限]）。引擎认识每个字段，按固定组件渲染，
+     **不解析 HTML、不执行 JS、不需要沙箱** —— 不存在需要执行的代码。
+     纯文本走原路径（直接 textContent），省开销。
+
+     注意：解析发生在**渲染时**，渲染产物不写进 history。
+     存档指纹基于 JSON 内容算，写进去会让旧档"内容变了"。 */
+  function textBox(text, cls = 'ne-msg-text') {
+    /* 显示层正则先跑（与酒馆一致：正则在渲染前作用）。
+       只开 destination.display 的规则走这里 —— 它们**不进上下文**，
+       这正是前端卡不会让 token 暴涨的原因。 */
+    const shown = applyDisplayOutbound(String(text ?? ''), regexRules).text;
+    const src = shown;
+
+    if (!hasCardMarkup(src)) {
+      const p = el('p', cls);
+      p.textContent = src;
+      return p;
+    }
+
+    // 有标记：切成段，文本段与组件段分别渲染
+    const wrap = el('div', `${cls} ne-rich`);
+    for (const seg of parseCardMarkup(src)) {
+      if (seg.type === 'text') {
+        const p = el('p', 'ne-msg-text');
+        renderInlineInto(p, seg.text, el);
+        wrap.appendChild(p);
+      } else {
+        wrap.appendChild(renderBlock(seg, el));
+      }
+    }
+    return wrap;
   }
 
   /* ── 多版本切换 ─────────────────────────────────────────── */
@@ -1530,18 +1592,25 @@ function startMain(root, opts = {}) {
         row.appendChild(sw);
 
         const ta = el('textarea', 'ne-field-area stack-ta');
-        ta.rows = entry.locked ? 2 : 3;
+        ta.rows = entry.locked ? 6 : 3;
         ta.value = entry.content;
         ta.placeholder = entry.name;
-        if (entry.locked) ta.disabled = true;
+        /* 锁定条目是**只读展示**，不是可编辑的空框：
+           它的内容由引擎在构建消息时直接带上，不走栈。
+           显示出来是为了让玩家看得见引擎到底对模型说了什么。 */
+        if (entry.locked) ta.readOnly = true;
         ta.addEventListener('change', () => {
+          if (entry.locked) return;
           entry.content = ta.value;
           saveStack();
         });
         row.appendChild(ta);
         stackWrap.appendChild(row);
 
-        if (!entry.locked) {
+        if (entry.locked) {
+          stackWrap.appendChild(el('p', 'stack-locked-note',
+            '引擎自带的叙事规则，每轮直接发送，不可修改或关闭 —— 列在这里只是让你看得见。'));
+        } else {
           const del = el('button', 'ne-btn stack-del', '删除');
           del.type = 'button';
           del.dataset.sfx = 'deny';
@@ -1596,41 +1665,149 @@ function startMain(root, opts = {}) {
 
     function renderRxUI() {
       rxWrap.innerHTML = '';
+      /* 每条规则 = 一条清单项。
+         改动前先读 src/regex.js 顶部的数据模型说明 —— 它是 source × destination
+         二维（读酒馆源码后确定），不是社区讲的"四个作用点"。 */
       for (const rule of regexRules) {
+        const r = normalizeRule(rule);
         const row = el('div', 'rx-entry');
-        const findIn = el('input', 'ne-field-input rx-mini');
-        findIn.value = rule.find;
+        row.dataset.invalid = r.invalid ? '1' : '0';
+
+        /* ── 第一行：序号 + 查找 → 替换为 + 删除 ── */
+        const main = el('div', 'rx-main');
+
+        const no = el('span', 'rx-no');
+        no.textContent = String(regexRules.indexOf(rule) + 1).padStart(2, '0');
+
+        const pair = el('div', 'rx-pair');
+        const findIn = el('input', 'rx-in rx-in-find');
+        findIn.value = rule.find ?? '';
         findIn.placeholder = '查找（正则）';
+        findIn.spellcheck = false;
         findIn.addEventListener('change', () => {
           rule.find = findIn.value;
           saveRx();
+          renderRxUI();
         });
-        const repIn = el('input', 'ne-field-input rx-mini');
-        repIn.value = rule.replace;
+
+        const arrow = el('span', 'rx-arrow', '→');
+
+        const repIn = el('input', 'rx-in rx-in-rep');
+        repIn.value = rule.replace ?? '';
         repIn.placeholder = '替换为';
+        repIn.spellcheck = false;
         repIn.addEventListener('change', () => {
           rule.replace = repIn.value;
           saveRx();
         });
-        const del = el('button', 'ne-btn', '删');
+
+        pair.append(findIn, arrow, repIn);
+
+        const del = el('button', 'rx-del');
         del.type = 'button';
+        del.title = '删除这条规则';
+        del.setAttribute('aria-label', '删除这条规则');
         del.dataset.sfx = 'deny';
+        del.appendChild(el('i', 'ic ic-x'));
         del.addEventListener('click', () => {
-          regexRules = regexRules.filter(r => r.id !== rule.id);
+          regexRules = regexRules.filter(x => x.id !== rule.id);
           saveRx();
           renderRxUI();
         });
-        row.append(findIn, repIn, del);
+
+        main.append(no, pair, del);
+        row.appendChild(main);
+
+        /* ── 第二行：两个 destination 复选框（与酒馆数据模型同构） ──
+           「显示」= 只改渲染，不进上下文；「提示词」= 模型能读到。
+           两个都开就是旧行为。分开的意义：前端卡只开显示，token 不涨。 */
+        const scope = el('div', 'rx-scope');
+
+        const mkBox = (key, label, hint) => {
+          const id = `rx-${rule.id}-${key}`;
+          const lab = el('label', 'rx-check');
+          lab.htmlFor = id;
+          const box = el('input', 'rx-check-input');
+          box.type = 'checkbox';
+          box.id = id;
+          box.checked = rule.destination?.[key] === true;
+          box.addEventListener('change', () => {
+            rule.destination = { ...normalizeRule(rule).destination, [key]: box.checked };
+            // 老格式折过来之后就写新格式，避免每次读都再折一遍
+            delete rule.scope;
+            saveRx();
+          });
+          lab.append(box, el('span', 'rx-check-box'), el('span', 'rx-check-text', label));
+          if (hint) lab.title = hint;
+          return lab;
+        };
+
+        const mkSrc = (key, label, hint) => {
+          const id = `rx-${rule.id}-src-${key}`;
+          const lab = el('label', 'rx-check rx-check-src');
+          lab.htmlFor = id;
+          const box = el('input', 'rx-check-input');
+          box.type = 'checkbox';
+          box.id = id;
+          box.checked = rule.source?.[key] === true;
+          box.addEventListener('change', () => {
+            rule.source = { ...normalizeRule(rule).source, [key]: box.checked };
+            delete rule.scope;
+            saveRx();
+          });
+          lab.append(box, el('span', 'rx-check-box'), el('span', 'rx-check-text', label));
+          if (hint) lab.title = hint;
+          return lab;
+        };
+
+        scope.append(
+          el('span', 'rx-scope-label', '作用'),
+          mkSrc('output', '模型输出'),
+          mkSrc('input', '玩家输入'),
+          el('span', 'rx-scope-sep'),
+          el('span', 'rx-scope-label', '送往'),
+          mkBox('display', '显示', '只改你看到的，不进模型上下文 —— 前端卡靠它保持 token 不涨'),
+          mkBox('prompt', '提示词', '模型能读到改动'),
+        );
+        row.appendChild(scope);
+
+        /* ── 非法正则：就地标红并给原因，不藏 ── */
+        if (r.invalid) {
+          row.appendChild(el('p', 'rx-err', '正则不合法，已停用。改好即恢复。'));
+        } else if (!r.destination.display && !r.destination.prompt) {
+          row.appendChild(el('p', 'rx-warn', '两个「送往」都没勾 —— 这条规则不会起作用。'));
+        }
+
         rxWrap.appendChild(row);
       }
 
+      /* ── 新增：同样是「查找 → 替换为 + 两个复选框」 ── */
       const addRow = el('div', 'rx-add');
       const fIn = el('input', 'ne-field-input rx-mini');
-      fIn.placeholder = '查找';
+      fIn.placeholder = '查找（正则）';
+      fIn.spellcheck = false;
       const rIn = el('input', 'ne-field-input rx-mini');
       rIn.placeholder = '替换为';
-      const add = el('button', 'ne-btn', '添加规则');
+      rIn.spellcheck = false;
+
+      const newDst = { display: true, prompt: false };
+      const addBoxes = el('div', 'rx-add-scope');
+      for (const [key, label] of [['display', '显示'], ['prompt', '提示词']]) {
+        const id = `rx-new-${key}`;
+        const lab = el('label', 'rx-check');
+        lab.htmlFor = id;
+        const box = el('input', 'rx-check-input');
+        box.type = 'checkbox';
+        box.id = id;
+        box.checked = newDst[key];
+        box.addEventListener('change', () => { newDst[key] = box.checked; });
+        lab.append(box, el('span', 'rx-check-box'), el('span', 'rx-check-text', label));
+        addBoxes.appendChild(lab);
+      }
+
+      const add = el('button', 'ne-btn rx-add-btn', '添加规则');
       add.type = 'button';
+      add.dataset.sfx = 'confirm';
       add.addEventListener('click', () => {
         if (!fIn.value) return;
         regexRules.push({
@@ -1638,7 +1815,9 @@ function startMain(root, opts = {}) {
           name: '自定义',
           find: fIn.value,
           replace: rIn.value,
-          scope: 'out',
+          flags: 'g',
+          source: { output: true, input: false },
+          destination: { display: newDst.display, prompt: newDst.prompt },
           enabled: true,
         });
         fIn.value = '';
@@ -1646,13 +1825,15 @@ function startMain(root, opts = {}) {
         saveRx();
         renderRxUI();
       });
-      addRow.append(fIn, rIn, add);
+
+      addRow.append(fIn, rIn, addBoxes, add);
       rxWrap.appendChild(addRow);
     }
     renderRxUI();
     rxSec.appendChild(rxWrap);
     rxSec.appendChild(el('p', 'ne-modal-warn',
-      '作用于模型正文。非法正则会自动停用并保留在列表里，改好即恢复。'));
+      '「显示」只改你看到的，「提示词」会让模型读到。前端卡请只勾显示。'
+      + '非法正则会自动停用并保留在列表里，改好即恢复。'));
     card.appendChild(rxSec);
 
     /* 外观：玻璃旋钮（Aqua 同款，实时生效） */

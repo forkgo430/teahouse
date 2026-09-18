@@ -15,6 +15,7 @@ import { scanWorldbook, renderWorldbook } from './worldbook.js';
 import { applyMacros, buildBuiltins } from './macros.js';
 import { trimHistory } from './context.js';
 import { applyInbound, applyOutbound } from './regex.js';
+import { assembleStack } from './prompts.js';
 import { buildFreeMessages, parseSegments, segmentsToText, pickSpeakers } from './freechat.js';
 import {
   buildChoiceMessages,
@@ -32,7 +33,34 @@ export function createDirector({ world, client = null, onDelta = null, options =
     recentKeep: options.recentKeep ?? 4,
     inboundRules: options.inboundRules ?? [],
     outboundRules: options.outboundRules ?? [],
+    promptStack: options.promptStack ?? [],
   };
+
+  /**
+   * 把提示词栈装进消息列表。
+   *
+   * system 条目拼到系统提示**之前**（玩家自定义的写法在引擎规则之上），
+   * user/assistant 条目按顺序插在对话尾部之前。
+   *
+   * 栈为空（或全被关掉）时原样返回 —— 不产生空消息，也不动 messages[0]。
+   * 幂等：同一个 messages 传第二次不会再插一遍。
+   */
+  function withStack(messages) {
+    const stack = settings.promptStack;
+    if (!Array.isArray(stack) || stack.length === 0) return messages;
+
+    const { system, injected } = assembleStack(stack);
+    const out = messages.slice();
+
+    if (system && out[0]?.role === 'system') {
+      out[0] = { ...out[0], content: `${system}\n\n${out[0].content}` };
+    }
+    for (const m of injected) {
+      // 插在最后一条之前，保证对话尾部是「当前这一轮」
+      out.splice(Math.max(out.length - 1, 0), 0, m);
+    }
+    return out;
+  }
 
   /**
    * 按当前局面扫世界书，只把命中的条目取出来。
@@ -180,7 +208,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
               .map(a => a.name)
           : [];
 
-        const messages = buildFreeMessages({
+        let messages = buildFreeMessages({
           brief: world.brief,
           situation: describeSituation(state, world),
           history: (state.history ?? []).slice(-12),
@@ -191,6 +219,9 @@ export function createDirector({ world, client = null, onDelta = null, options =
           speakers,
           lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
         });
+
+        // 玩家自己的提示词栈（在预设系统提示之下、引擎规则之上）
+        messages = withStack(messages);
 
         // 导入的预设若带系统提示词，拼在最前面（只影响「怎么说」）
         if (world.presetSystemPrompt) {
@@ -235,7 +266,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
         const ctx = assembleContext(state, playerInput);
         const lore = loreFor(state, [branch.label, playerInput ?? '', ...recentTexts(state)]);
 
-        const messages = buildNarrationMessages({
+        let messages = buildNarrationMessages({
           brief: world.brief,
           situation: describeSituation(state, world),
           event,
@@ -245,6 +276,9 @@ export function createDirector({ world, client = null, onDelta = null, options =
           world,
           lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
         });
+
+        // 玩家自己的提示词栈（在预设系统提示之下、引擎规则之上）
+        messages = withStack(messages);
 
         // 导入的预设若带系统提示词，拼在最前面（预设只影响"怎么说"，不改变则）
         if (world.presetSystemPrompt) {

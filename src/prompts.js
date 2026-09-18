@@ -23,7 +23,6 @@ export function defaultStack(engineSystemPrompt) {
     },
   ];
 }
-
 /** 归一化一条外部栈条目（酒馆 prompts 数组的形状） */
 export function normalizePromptEntry(raw = {}, index = 0) {
   return {

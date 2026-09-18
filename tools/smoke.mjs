@@ -167,6 +167,62 @@ async function run() {
     if ('${mode}' !== 'rainnight' && modalText.includes('边界机制')) {
       R.missing.push('茶馆标准不该出现「边界机制」开关');
     }
+
+    /* 正则段：作用范围的两个维度（source × destination）必须在场。
+       它们不是"四作用点"—— 读酒馆源码后确定是二维，见 src/regex.js 顶部。
+
+       这两个标签**只在规则行里**（不在「添加规则」那一行），所以先要求列表非空：
+       出厂规则会保证新装就有条目。列表空 = 面板只剩一个孤零零的按钮，
+       玩家不知道规则长什么样 —— 那正是这条断言要拦的东西。 */
+    if (modalText.includes('正则后处理')) {
+      const shipped = document.querySelectorAll('.rx-entry');
+      if (shipped.length === 0) {
+        R.missing.push('正则列表是空的（新装应有一份出厂规则）');
+      } else {
+        const scopeText = (document.querySelector('.rx-scope') || {}).innerText || '';
+        for (const label of ['模型输出', '玩家输入', '显示', '提示词']) {
+          if (!scopeText.includes(label)) R.missing.push('正则段缺「' + label + '」');
+        }
+      }
+    } else R.missing.push('设置面板缺「正则后处理」');
+
+    /* 加一条规则，验证两个复选框真的能存进去、并被 normalizeRule 认下。
+       注意：查找/替换是 <input>，**input.value 不进 innerText**
+       —— 读 innerText 找「测试串」永远找不到，那是探针在骗人，不是功能坏了。 */
+    const addFind = [...document.querySelectorAll('.rx-add input')][0];
+    const addRep = [...document.querySelectorAll('.rx-add input')][1];
+    if (addFind && addRep) {
+      addFind.value = '测试串';
+      addRep.value = '替换后';
+      const promptBox = document.querySelector('#rx-new-prompt');
+      const displayBox = document.querySelector('#rx-new-display');
+      if (displayBox && !displayBox.checked) R.missing.push('新增规则默认没勾「显示」');
+      if (promptBox && promptBox.checked) R.missing.push('新增规则默认勾了「提示词」（不该）');
+      if (promptBox) promptBox.click();          // 手动勾上提示词
+      const addBtn = [...document.querySelectorAll('.rx-add button')]
+        .find(b => b.textContent.includes('添加规则'));
+      if (addBtn) {
+        const before = document.querySelectorAll('.rx-entry').length;
+        addBtn.click();
+        await wait(400);
+        const rows = document.querySelectorAll('.rx-entry');
+        if (rows.length === 0) R.missing.push('添加规则后列表里没有条目');
+        else if (rows.length !== before + 1) {
+          R.missing.push('添加规则后条目数没 +1（' + before + ' → ' + rows.length + '）');
+        }
+        const last = rows[rows.length - 1];
+        // 值在 input 里，不在 innerText 里
+        const findVal = last?.querySelector('.rx-in-find')?.value ?? '';
+        if (findVal !== '测试串') R.missing.push('新规则的「查找」没落进输入框：' + JSON.stringify(findVal));
+        // 复选框状态要跟刚才点的对得上（显示 on / 提示词 手动开了）
+        const dBox = last?.querySelector('input[id^="rx-"][id$="-display"]');
+        const pBox = last?.querySelector('input[id^="rx-"][id$="-prompt"]');
+        if (dBox && !dBox.checked) R.missing.push('新规则没记住「显示」');
+        if (pBox && !pBox.checked) R.missing.push('新规则没记住手动开的「提示词」');
+        const scopeTxt = (last?.querySelector('.rx-scope') || {}).innerText || '';
+        if (!scopeTxt.includes('作用')) R.missing.push('规则条目里没有「作用」范围行');
+      } else R.missing.push('找不到「添加规则」按钮');
+    } else R.missing.push('.rx-add 的查找/替换输入框');
   } else R.missing.push('.ne-icon-btn 设置');
 
   // ⑤ 右缘书架：打开，检查三本书的几何
@@ -184,6 +240,65 @@ async function run() {
     await wait(400);
   }
   R.notes.push('弹窗还在=' + !!q('.ne-modal'));
+
+  /* ④b 结构化卡片：渲染器必须真的画出来，而不是只有字符串处理函数在。
+     「元素在」不等于「样子对」的老问题换个形式：
+     card.js 的函数单测全绿，但 CSS 若没打到 class，卡片会是一坨无样式文字。
+     所以这里量**计算样式**（背景/圆角/渐变），不只看 class 名。 */
+  {
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;left:-9999px;top:0;width:420px';
+    document.body.appendChild(host);
+
+    const text = ['她把伞靠在门边。', '[状态栏]', '好感 = 3', '信任 = 0 / 10', '[/状态栏]',
+      '[物品栏]', '雨伞', '[/物品栏]'].join('\\n');
+
+    // 产物是 IIFE，内部函数取不到 —— 用同一份 CSS 造等价结构，
+    // 量的目标是「这套 class 有没有样式」，而不是「函数有没有被调」。
+    host.innerHTML = (
+      '<div class="ne-card ne-card-stats">'
+      + '<div class="ne-card-head"><span class="ne-card-title">状态栏</span></div>'
+      + '<div class="ne-card-row"><span class="ne-card-key">好感</span>'
+      + '<div class="ne-card-bar"><i style="width:34%"></i></div>'
+      + '<span class="ne-card-num">34</span></div></div>'
+      + '<span class="ne-tag">疲惫</span>'
+    );
+
+    const card = host.querySelector('.ne-card');
+    const cs = card ? getComputedStyle(card) : null;
+    if (!card) R.missing.push('卡片样式：.ne-card 造不出来');
+    else {
+      // 背景不能是透明的（透明 = CSS 没命中）
+      const bg = cs.backgroundColor;
+      if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+        R.missing.push('卡片没有背景色（.ne-card 的 CSS 没生效）');
+      }
+      const r = parseFloat(cs.borderRadius) || 0;
+      if (r < 3) R.missing.push('卡片圆角=' + r + 'px（.ne-card 的 CSS 没生效）');
+      const bar = host.querySelector('.ne-card-bar > i');
+      if (!bar) R.missing.push('卡片缺少 .ne-card-bar > i');
+      else {
+        const bi = getComputedStyle(bar).backgroundImage || '';
+        if (!/gradient/i.test(bi)) R.missing.push('进度条没有渐变填充（.ne-card-bar > i 没生效）');
+        if (bar.style.width !== '34%') R.missing.push('进度条宽度没按内联值走');
+      }
+      const tag = host.querySelector('.ne-tag');
+      if (tag) {
+        const ts = getComputedStyle(tag);
+        if (!ts.backgroundColor || ts.backgroundColor === 'rgba(0, 0, 0, 0)') {
+          R.missing.push('.ne-tag 没有底色（行内标签样式没生效）');
+        }
+      } else R.missing.push('缺少 .ne-tag');
+      // 图标体系：删除按钮的 × 必须是 mask 出来的，不是掉字
+      const probe = document.querySelector('.rx-del .ic');
+      if (probe) {
+        const ps = getComputedStyle(probe);
+        const mask = ps.webkitMaskImage || ps.maskImage || 'none';
+        if (mask === 'none') R.missing.push('删除按钮的图标没有 mask（会掉成方框/@）');
+      } else R.missing.push('.rx-del 里没有 .ic 图标元素');
+    }
+    host.remove();
+  }
 
   const handle = q('.shelf-handle');
   if (!handle) R.missing.push('.shelf-handle（书架没有入口）');

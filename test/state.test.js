@@ -476,3 +476,97 @@ test('applyEffectInPlace 可直接作用于已克隆对象', () => {
   assert.equal(change.from, undefined);
   assert.equal(change.to, 1);
 });
+
+/* ---------------------------------------------------------------- *
+ * subscribe —— 状态变更广播
+ * ---------------------------------------------------------------- */
+
+test('subscribe：四种写路径都广播一次', () => {
+  const store = createStore(baseState());
+  const seen = [];
+  store.subscribe((meta) => seen.push(meta.mode));
+
+  store.dispatch([{ path: 'flags.a', op: 'set', value: 1 }]);
+  assert.deepEqual(seen, ['dispatch']);
+
+  store.commit(store.getState());
+  assert.deepEqual(seen, ['dispatch', 'commit']);
+
+  const snap = store.getState();
+  store.replace(snap);
+  assert.deepEqual(seen, ['dispatch', 'commit', 'replace']);
+
+  // replace 不带 snapshots 时时间线只剩一条，depth 为 0，回退无从谈起。
+  // 所以先推两步再回退 —— 否则这条用例测的是"没东西可退"而不是"回退会广播"。
+  store.dispatch([{ path: 'flags.b', op: 'set', value: 1 }]);
+  store.dispatch([{ path: 'flags.c', op: 'set', value: 1 }]);
+  assert.equal(store.rollback(1), true, '前提：确实有东西可退');
+  assert.deepEqual(seen, ['dispatch', 'commit', 'replace', 'dispatch', 'dispatch', 'rollback']);
+});
+
+test('没有可退的步骤时 rollback 不广播（它什么都没做）', () => {
+  const store = createStore(baseState());
+  let n = 0;
+  store.subscribe(() => n++);
+  store.replace(store.getState());   // 时间线重置为一条
+  assert.equal(store.rollback(1), false);
+  assert.equal(n, 1, '只有 replace 那一次；失败的 rollback 不该谎报变更');
+});
+
+test('广播发生在状态落地之后 —— 订阅者读到的是新值', () => {
+  const store = createStore(baseState());
+  let seenAtCallback = null;
+  store.subscribe(() => { seenAtCallback = store.getState().flags.probe; });
+
+  store.dispatch([{ path: 'flags.probe', op: 'set', value: 42 }]);
+  assert.equal(seenAtCallback, 42, '回调里读到旧值说明广播时机错了');
+});
+
+test('dispatch 的广播带 changes，replace/rollback 给 null', () => {
+  const store = createStore(baseState());
+  const metas = [];
+  store.subscribe((m) => metas.push(m));
+
+  store.dispatch([{ path: 'flags.x', op: 'set', value: 1 }]);
+  assert.equal(Array.isArray(metas[0].changes), true);
+  assert.equal(metas[0].changes[0].path, 'flags.x');
+  assert.equal(metas[0].changes[0].from, undefined);
+
+  store.replace(store.getState());
+  assert.equal(metas[1].changes, null, '整表替换没有逐条 diff');
+});
+
+test('订阅者抛错不影响其他订阅者，也不让写入失败', () => {
+  const store = createStore(baseState());
+  let second = 0;
+  store.subscribe(() => { throw new Error('订阅者炸了'); });
+  store.subscribe(() => { second++; });
+
+  assert.doesNotThrow(() => {
+    store.dispatch([{ path: 'flags.alive', op: 'set', value: true }]);
+  });
+  assert.equal(second, 1, '第一个订阅者抛了，第二个仍要收到');
+  assert.equal(store.getState().flags.alive, true, '写入本身必须成功 —— 订阅者是观测方不是参与者');
+});
+
+test('unsubscribe 之后不再收到', () => {
+  const store = createStore(baseState());
+  let n = 0;
+  const off = store.subscribe(() => n++);
+  store.dispatch([{ path: 'flags.a', op: 'set', value: 1 }]);
+  assert.equal(n, 1);
+  off();
+  store.dispatch([{ path: 'flags.b', op: 'set', value: 1 }]);
+  assert.equal(n, 1, '退订后不该再被叫醒');
+});
+
+test('subscribe 传非函数直接抛，不静默收下', () => {
+  const store = createStore(baseState());
+  assert.throws(() => store.subscribe(null), /函数/);
+  assert.throws(() => store.subscribe('x'), /函数/);
+});
+
+test('没有订阅者时广播是空操作，不报错', () => {
+  const store = createStore(baseState());
+  assert.doesNotThrow(() => store.dispatch([{ path: 'flags.a', op: 'set', value: 1 }]));
+});

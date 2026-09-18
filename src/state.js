@@ -264,6 +264,8 @@ function brief(v) {
 export function createStore(initialState, options = {}) {
   const maxSnapshots = options.maxSnapshots ?? 500;
   let state;
+  /** 状态变更订阅者。写通道只有一条，所以广播点也只有这一处。 */
+  const subscribers = new Set();
 
   /** 所有写入的唯一落地处。派生字段在这里重算，别在别处手改。 */
   function publish(next) {
@@ -274,6 +276,23 @@ export function createStore(initialState, options = {}) {
     cloned.$auto = cloned.$auto ?? {};
     cloned.$auto.achievement_count = (cloned.achievements ?? []).length;
     state = cloned;
+  }
+
+  /**
+   * 广播一次状态变更。**必须在 publish 之后调**，订阅者读 getState() 才是新值。
+   *
+   * 单个订阅者抛错不能中断其他订阅者，也不能让这次写入失败 —— 订阅者（脚本桥）
+   * 是观测方，不是参与者；它坏了不该把引擎带坏。所以逐个 try/catch 吞掉。
+   * 这里只 console.error，不收集上报：桥自己已有 log 通道记录脚本侧的错误。
+   */
+  function broadcast(meta) {
+    if (subscribers.size === 0) return;
+    const snapshot = { turn: (state.history ?? []).length + 1, mode: meta.mode, changes: meta.changes ?? null };
+    for (const fn of [...subscribers]) {
+      try { fn(snapshot); } catch (e) {
+        console.error('[茶馆] state:changed 订阅者出错：', e);
+      }
+    }
   }
 
   // 初始状态同样经 publish 落地：否则 $auto.achievement_count 要等到第一次写入
@@ -294,15 +313,19 @@ export function createStore(initialState, options = {}) {
       const result = applyEffects(state, effects);
       publish(result.state);
       pushSnapshot();
+      broadcast({ mode: 'dispatch', changes: result.changes });
       return result;
     },
 
     /**
      * 直接提交一个新状态并留快照（时间推进、引擎接管状态时用，回档仍可用）
      */
-    commit(nextState) {
+    commit(nextState, meta) {
       publish(nextState);
       pushSnapshot();
+      // changes 由调用方给：commit 收到的是任意状态对象，本层无从比对。
+      // 不传就是 null —— 订阅者要能处理"知道变了但不知道变了什么"。
+      broadcast({ mode: 'commit', changes: meta?.changes ?? null });
       return cloneState(state);
     },
 
@@ -320,6 +343,7 @@ export function createStore(initialState, options = {}) {
         publish(nextState);
         timeline.push(cloneState(state));
       }
+      broadcast({ mode: 'replace', changes: null });
       return cloneState(state);
     },
 
@@ -331,7 +355,22 @@ export function createStore(initialState, options = {}) {
       if (timeline.length - 1 < steps) return false;
       timeline.length = timeline.length - steps;
       publish(timeline[timeline.length - 1]);
+      broadcast({ mode: 'rollback', changes: null });
       return true;
+    },
+
+    /**
+     * 订阅状态变更。返回取消订阅的函数。
+     *
+     * 注意广播发生在**状态已落地之后**，订阅者读 getState() 拿到的是新值。
+     * 脚本自己触发的写入同样会广播（BOY_EVENTS 里 state:changed 的描述就是
+     * 「含脚本自己改的」）—— 不会死循环，因为帧侧没有"收到事件就自动写"的
+     * 钩子，写入一律是脚本显式调用 teahouse.write.* 才发生。
+     */
+    subscribe(fn) {
+      if (typeof fn !== 'function') throw new TypeError('subscribe 需要函数');
+      subscribers.add(fn);
+      return () => subscribers.delete(fn);
     },
 
     /** 可回退的最大步数 */

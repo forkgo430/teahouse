@@ -79,6 +79,11 @@ export function createDirector({ world, client = null, onDelta = null, options =
    */
   function statusCardFor(state, report) {
     if (!settings.statusCard) return '';
+    /* 雨夜模式的卡片由**前端**根据 state 现算（ui/app.js 的 scenePanelNode +
+       src/scenePanel.js）。这里再让模型往正文里塞一张，玩家就会看到两张卡：
+       一张模型放的、一张界面画的，而且它们更新时机不同，迟早对不上。
+       所以雨夜侧一律不发这张卡 —— 卡片只有一个来源。 */
+    if ((world?.rainLevel ?? 0) > 0) return '';
     let view = null;
     try {
       view = settings.buildView ? settings.buildView(state) : null;

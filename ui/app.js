@@ -47,6 +47,7 @@ import {
 } from '../src/card.js';
 import { applyDisplayOutbound, normalizeRule, SHIPPED_RULES } from '../src/regex.js';
 import { scenePanelMarkup } from '../src/scenePanel.js';
+import { parseActions, formatActions, DEFAULT_ACTIONS_TEXT, BUILTIN_ACTIONS } from '../src/actions.js';
 import { callResource, resourceBoard } from '../src/resources.js';
 import { useCard, cardBoard, cardsLeft } from '../src/cards.js';
 import { createBoy, normalizeBoyConfig, DEFAULT_BOY, WRITABLE, BOY_EVENTS } from '../src/boy.js';
@@ -324,6 +325,8 @@ function applyGlass() {
 applyGlass();
 
 /* 提示词栈 / 正则规则 / 上下文预算：持久化读取 */
+/* 快捷动作：一行一条的声明式文本，见 src/actions.js */
+const ACTIONS_KEY = 'ne.actions';
 const STACK_KEY = 'ne.promptstack';
 const STYLE_KEY = 'ne.narration.style';
 const REGEX_KEY = 'ne.regexrules';
@@ -1167,8 +1170,15 @@ function startMain(root, opts = {}) {
   btnSend.type = 'submit';
   btnSend.dataset.sfx = 'confirm';   // 提交这句话 = 一次确认，不是随手点的选项
   inputRow.append(input, btnSend);
+
+  /* 快捷动作栏 —— 只抄 STscript 那套的**交互形态**（把常用操作绑成按钮），
+     不抄它的语言：解析器/AST/闭包树那一层我们不需要，要复杂逻辑请用茶馆小二。
+     ⚠ 顺序必须是 `dispatch → render() → appendSystem`（见下面），
+       反了的话 render() 里的 rebuildStream() 会把刚写的提示抹掉。 */
+  const actionBar = el('div', 'ne-action-bar');
+  const actionErr = el('div', 'ne-action-err');
   const tip = el('p', 'ne-composer-tip', '点选项 / 输入序号 / 输入分支字母 / 直接用一句话说自己想做什么');
-  composerInner.append(choices, inputRow, tip);
+  composerInner.append(choices, actionBar, actionErr, inputRow, tip);
   composer.appendChild(composerInner);
 
   // 胶囊放进消息列里 sticky 吸底：与消息流天然同轴，抽屉开合零 JS 跟随
@@ -1551,6 +1561,71 @@ function startMain(root, opts = {}) {
     });
 
     head.appendChild(btn);
+  }
+
+  /* ── 快捷动作 ──────────────────────────────────────────────── */
+
+  function readActionsText() {
+    try {
+      return storage?.getItem(ACTIONS_KEY) ?? DEFAULT_ACTIONS_TEXT;
+    } catch { return DEFAULT_ACTIONS_TEXT; }
+  }
+
+  function writeActionsText(text) {
+    try { storage?.setItem(ACTIONS_KEY, text); } catch { /* 忽略 */ }
+  }
+
+  /** 解析 + 报错（非法行不静默）。返回可用动作列表。 */
+  function currentActions() {
+    const { actions, issues } = parseActions(readActionsText());
+    // 内置动作依赖本闭包里的函数，得等它们定义完才能建（见 renderActionBar）
+    return { actions, issues };
+  }
+
+  function runAction(a) {
+    if (a.kind === 'builtin') {
+      const fn = { save, load, undo, restart: reset }[a.builtin];
+      if (typeof fn !== 'function') { appendSystem(`内置动作「${a.builtin}」不可用`, 'warn'); return; }
+      fn();
+      return;
+    }
+    if (a.kind === 'effect') {
+      if (busy) { appendSystem('正在生成，等这一轮结束再改状态', 'warn'); return; }
+      try {
+        store.dispatch(a.effects.map(e => ({ ...e })));
+      } catch (err) {
+        appendSystem(`「${a.label}」没生效：${err.message}`, 'warn');   // 非法路径不静默
+        return;
+      }
+      render();
+      appendSystem(`已执行「${a.label}」`, 'good');
+      return;
+    }
+    // say：填进输入框并当作他说的话发出去
+    input.value = a.text;
+    submitText();
+  }
+
+  function renderActionBar() {
+    actionBar.innerHTML = '';
+    const { actions, issues } = currentActions();
+
+    for (const a of actions) {
+      const b = el('button', 'ne-action-btn', a.label);
+      b.type = 'button';
+      b.dataset.sfx = 'select';        // 挑一个动作，不是开关
+      b.title = a.kind === 'say' ? `他会说：${a.text}`
+        : a.kind === 'effect' ? a.effects.map(e => `${e.path} ${e.op} ${e.value}`).join('\n')
+          : `内置：${BUILTIN_ACTIONS[a.builtin] ?? a.builtin}`;
+      b.addEventListener('click', () => runAction(a));
+      actionBar.appendChild(b);
+    }
+
+    // 非法行写在栏下方，玩家看得见 —— 不静默吞掉
+    actionErr.textContent = issues.length
+      ? `快捷动作有 ${issues.length} 行没读进去：` + issues.map(i => `第 ${i.line} 行 ${i.why}`).join('；')
+      : '';
+    actionErr.hidden = issues.length === 0;
   }
 
   function appendSystem(text, tone) {
@@ -2121,6 +2196,7 @@ function startMain(root, opts = {}) {
   }
 
   function openSettingsModal() {
+    let actSec = null;   // 「快捷动作」那组的内容区（renderActionBar 之后才建）
     const overlay = el('div', 'ne-modal');
     const card = el('div', 'ne-modal-card');
     card.appendChild(el('h2', 'ne-modal-title', '设置'));
@@ -2493,6 +2569,39 @@ function startMain(root, opts = {}) {
     readSec.appendChild(el('p', 'ne-modal-warn',
       '只影响显示，**不改存档里的原文** —— 正文永远按原始文本存，切段只发生在渲染时。'));
     card.appendChild(readFold.sec);
+
+    /* ── 快捷动作（2026-09-19） ──
+       一行一条：`标签 | 类型 | 内容`，类型 say / effect / builtin。
+       刻意不做成表格编辑器 —— 文本一行一条最省事，也最好复制粘贴。 */
+    const actFold = foldSection('快捷动作', { key: 'actions', note: '自己定一组按钮' });
+    actSec = actFold.body;
+
+    const actArea = el('textarea', 'ne-modal-area');
+    actArea.value = readActionsText();
+    actArea.spellcheck = false;
+    actSec.appendChild(actArea);
+    actSec.appendChild(el('p', 'ne-modal-note',
+      '一行一条：标签 | 类型 | 内容。类型三种 —— '
+      + 'say（替他说一句）/ effect（直接改状态，如 actors.seeker.stats.trust add 3）/ '
+      + 'builtin（save 存档 / load 读档 / undo 回退 / restart 重开）。'
+      + '以 # 开头的行是注释。改动即时生效。'));
+    actArea.addEventListener('input', () => {
+      writeActionsText(actArea.value);
+      renderActionBar();
+    });
+    const actReset = el('button', 'ne-btn', '放回示例');
+    actReset.type = 'button';
+    actReset.dataset.sfx = 'toggle';
+    actReset.addEventListener('click', () => {
+      actArea.value = DEFAULT_ACTIONS_TEXT;
+      writeActionsText(actArea.value);
+      renderActionBar();
+    });
+    const actRow = el('div', 'ne-modal-actions');
+    actRow.appendChild(actReset);
+    actSec.appendChild(actRow);
+
+    card.appendChild(actFold.sec);
 
     /* ── 正则后处理 ── */
     const rxFold = foldSection('正则后处理', { key: 'regex', note: `${regexRules.length} 条` });
@@ -3273,6 +3382,7 @@ function startMain(root, opts = {}) {
   function render() {
     const state = store.getState();
     rebuildStream();
+    renderActionBar();
     renderSidebar(buildView(state, world));
     renderLibrary();
 
@@ -3681,6 +3791,8 @@ function startMain(root, opts = {}) {
       input.focus();
     }
   }
+
+  renderActionBar();
 
   inputRow.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -4598,7 +4710,10 @@ window.markSeen = async function (key) {
   }
 
   function reset() {
-    store.replace(createDemoState());
+    /* ⚠ 原来这里写死 `createDemoState()` —— 那是**茶馆**的初始状态。
+       雨夜模式点「重新开始」会装进茶馆的角色/旗标/事件，面板与事件匹配全对不上。
+       `initialStateFor(mode)` 在启动时用的就是它，这里只是漏了。 */
+    store.replace(initialStateFor(mode));
     render();
     appendSystem('已重新开始', 'good');
   }

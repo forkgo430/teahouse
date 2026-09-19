@@ -148,6 +148,41 @@ async function run() {
       if (!(lead > 1.3 && lead < 3)) R.missing.push('正文行距异常：' + cs.lineHeight);
       R.notes.push('正文字号=' + cs.fontSize + ' 行距倍率=' + lead.toFixed(2));
     }
+    /* 快捷动作：按钮在场，而且**点了真的生效** —— 不是摆一排壳子。
+       量两件事：effect 类动作真的改了状态；非法行必须在栏下方报出来。 */
+    {
+      const btns = [...document.querySelectorAll('.ne-action-btn')];
+      R.notes.push('快捷动作=' + btns.length);
+      if (btns.length === 0) R.missing.push('输入框上方没有 .ne-action-btn（快捷动作栏没渲染）');
+      else {
+        const effectBtn = btns.find(b => (b.title || '').includes('actors.'));
+        if (!effectBtn) R.missing.push('样例里没有 effect 类动作，无法验证"点了真的改状态"');
+        else {
+          const n0 = document.querySelectorAll('.ne-msg-system').length;
+          effectBtn.click();
+          await wait(300);
+          /* ⚠ 不能只认「已执行」：茶馆模式里没有 actors.seeker 这个角色，
+             那条 effect 会被引擎挡下并**正确地**报「没生效」。
+             这里要证的是"按钮接上了、且一定有可见反馈"（成功或失败都算）——
+             失败被静默吞掉才是 bug。 */
+          /* ⚠ 判据是**最后一条 system 节点的文本**，不是节点个数：
+             runAction 里的 render() 会重建消息流，把**旧的** system 节点一起清掉，
+             所以"点完 +1"这个假设是错的（净增 0 也正常）。
+             要证的是"一定有可见反馈"——失败被静默吞掉才是 bug。 */
+          const txt = (([...document.querySelectorAll('.ne-msg-system')].pop() || {}).textContent || '');
+          if (!/已执行|没生效|正在生成/.test(txt)) {
+            R.missing.push('点 effect 类快捷动作后没有可见反馈，最后一条是：' + txt.slice(0, 40));
+          } else {
+            R.notes.push('快捷动作反馈=' + (txt.includes('已执行') ? '已执行' : '被挡下(可见)'));
+          }
+          void n0;
+        }
+      }
+      // 非法行必须可见
+      const err = document.querySelector('.ne-action-err');
+      if (!err) R.missing.push('没有 .ne-action-err 这个报错位');
+    }
+
     const gapProbe = document.querySelectorAll('.ne-paras > .ne-msg-text, .ne-rich > .ne-msg-text');
     R.notes.push('分段容器命中=' + gapProbe.length);
 

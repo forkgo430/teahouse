@@ -154,7 +154,7 @@ async function run() {
     /* §18 可调用资源：必须真的能点、且点完真的进冷却。
        「有按钮」不算数 —— 量的是点下去之后按钮变灰 + 引擎给出反馈。 */
     if ('${mode}' === 'rainnight') {
-      const resBtns = [...document.querySelectorAll('.ne-res-btn')];
+      const resBtns = [...document.querySelectorAll(".ne-res-btn[data-kind='resource']")];
       if (resBtns.length === 0) R.missing.push('左抽屉没有 .ne-res-btn（资源调用没渲染）');
       else {
         R.notes.push('可调用资源=' + resBtns.length);
@@ -275,6 +275,44 @@ async function run() {
         R.missing.push('设置分组默认展开的有：' + opened.join(' / ') + '（要求全部默认折叠）');
       }
 
+      /* 雨夜机制：分组在场，而且**切换真的生效** —— 不是摆一排按钮就算做了。
+         量的是"关掉资源调用之后，左抽屉那一栏真的收起来了"。 */
+      if ('${mode}' === 'rainnight') {
+        const mechHead = [...document.querySelectorAll('.ne-fold-head')]
+          .find(h => h.textContent.includes('雨夜机制'));
+        if (!mechHead) R.missing.push('设置里没有「雨夜机制」分组');
+        else {
+          mechHead.click();
+          await wait(200);
+          const mechSec = mechHead.closest('.ne-fold');
+          const mtxt = mechSec.innerText || '';
+          for (const label of ['当轮意愿与边界', '保底推进', '资源调用',
+            '燕双鹰卡组', '亲密状态卡', '触发表']) {
+            if (!mtxt.includes(label)) R.missing.push('雨夜机制缺「' + label + '」');
+          }
+          R.notes.push('雨夜机制开关=' + mechSec.querySelectorAll('.ne-field button').length);
+
+          const resRow = [...mechSec.querySelectorAll('.ne-field')]
+            .find(f => f.textContent.includes('资源调用'));
+          const resBtn = resRow && resRow.querySelector('button');
+          if (!resBtn) R.missing.push('找不到「资源调用」的开关');
+          else {
+            const before = document.querySelectorAll(".ne-res-btn[data-kind='resource']").length;
+            if (before === 0) R.missing.push('开测前左抽屉就没有资源按钮，无法验证开关');
+            resBtn.click();
+            await wait(350);
+            if (before > 0 && document.querySelectorAll(".ne-res-btn[data-kind='resource']").length !== 0) {
+              R.missing.push('关掉「资源调用」后左抽屉仍显示资源按钮（开关没生效）');
+            }
+            resBtn.click();   // 开回来
+            await wait(350);
+            if (before > 0 && document.querySelectorAll(".ne-res-btn[data-kind='resource']").length !== before) {
+              R.missing.push('把「资源调用」开回来之后按钮数没恢复');
+            }
+          }
+        }
+      }
+
       const readHead = [...document.querySelectorAll('.ne-fold-head')]
         .find(h => h.textContent.includes('正文样式'));
       if (!readHead) R.missing.push('找不到「正文样式」的折叠头');
@@ -290,11 +328,10 @@ async function run() {
     }
 
     // 边界机制是雨夜模式声明的机制，只有那个模式该出现这个开关
-    if ('${mode}' === 'rainnight' && !modalText.includes('边界机制')) {
-      R.missing.push('雨夜模式的设置里没有「边界机制」开关');
-    }
-    if ('${mode}' !== 'rainnight' && modalText.includes('边界机制')) {
-      R.missing.push('茶馆标准不该出现「边界机制」开关');
+    /* 边界机制以前是单独一行，现在并进了「雨夜机制」分组（组内叫「当轮意愿与边界」）。
+       这里只校验"不该出现在茶馆标准里" —— 雨夜侧那 9 个开关由下面的分组断言负责。 */
+    if ('${mode}' !== 'rainnight' && modalText.includes('雨夜机制')) {
+      R.missing.push('茶馆标准不该出现「雨夜机制」分组');
     }
 
     /* 正则段：作用范围的两个维度（source × destination）必须在场。

@@ -64,6 +64,9 @@ export function createDirector({ world, client = null, onDelta = null, options =
     /* 状态卡：由**引擎**按本轮变化算出卡片标记，交模型原样带回正文。
        关掉它模型就继续自由发挥（老行为）。 */
     statusCard: options.statusCard ?? true,
+    /* 雨夜机制开关的读法，由 UI 递进来。
+       director 与 engine 一样**不读 localStorage** —— 读法从上面传，方便测。 */
+    mech: options.mech ?? (() => true),
     /* buildView 由调用方注入 —— director 不 import engine.js（engine 反过来
        不依赖 director，保持单向）。inject 的写法也让 test 里能塞个 stub。 */
     buildView: options.buildView ?? null,
@@ -348,7 +351,9 @@ export function createDirector({ world, client = null, onDelta = null, options =
           playerCard: world.playerCard ?? null,
           narrativeRules: world.narrativeRules ?? null,
           // §16 触发表：只在玩家原话确实命中关键词时才注入（没命中就是空串）
-          triggerHit: triggerNote(matchTriggers(ctx.inbound, world.triggers), state, world),
+          triggerHit: settings.mech('triggers')
+            ? triggerNote(matchTriggers(ctx.inbound, world.triggers), state, world)
+            : '',
           // §24.1 角色人设：只发有 persona 的角色（雨夜里就是林晚晴与周若宁）
           personas: (world.actorDefs ?? []).filter(a => a.persona).map(a => ({
             name: a.name,

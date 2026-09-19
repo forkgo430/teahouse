@@ -185,16 +185,21 @@ export function pickEvent(state, world) {
 
   let pool = candidates;
 
+  /* 保底推进总开关（§13.3）。**默认开**，模式声明 `rules.stall: false` 才关 ——
+     关掉就完全不干预事件池，给玩家一个"我就要自己乱走"的选项。
+     经 world.rules 传进来：引擎**不读 localStorage**。 */
+  const stallOn = world?.rules?.stall !== false;
+
   // 规则3 · 三连停摆补偿：连续 3 轮都只推进「小」，第 4 轮挑一个有大分支的事件
   const last3 = hist.slice(-3);
-  if (last3.length === 3 && last3.every(h => h.magnitude === '小')) {
+  if (stallOn && last3.length === 3 && last3.every(h => h.magnitude === '小')) {
     const big = candidates.filter(ev => (ev.branches ?? []).some(
       b => deriveMagnitude(b.effects ?? []) === '大'));
     if (big.length > 0) pool = big;
   } else {
     // 规则4 / 5 · 主线与次主线不可长期停滞（各 5 轮）
     const last5 = hist.slice(-5);
-    if (last5.length === 5) {
+    if (stallOn && last5.length === 5) {
       const noRelation = last5.every(h => h.line !== '关系线');
       const noInvest = last5.every(h => h.line !== '调查线');
 

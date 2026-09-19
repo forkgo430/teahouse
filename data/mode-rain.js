@@ -6200,9 +6200,13 @@ export const RAINNIGHT_MODE = {
   label: '雨夜模式',
   bodyClass: 'mode-rainnight',
   rainLevel: 0.85,
+  /* 模式声明的机制。现在**真的有人读了** ——
+     它是「雨夜机制」开关的落点：引擎（pickEvent 的保底推进）不读 localStorage，
+     由 UI 每轮把开关覆盖上去再交给引擎。 */
   rules: {
     consentEnforced: true,
     turnOnlyConsent: true,
+    stall: true,          // §13.3 保底推进；关掉＝完全不干预事件池
   },
 
   world: {

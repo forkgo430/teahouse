@@ -105,12 +105,59 @@ function writeVolume(v) {
   try { storage?.setItem(VOL_KEY, String(v)); } catch { /* 忽略 */ }
 }
 
-/** 雨夜的边界机制是否启用（默认开） */
-function readBoundary() {
-  try { return storage?.getItem(BOUNDARY_KEY) !== '0'; } catch { return true; }
+/* ── 雨夜机制总表（2026-09-19） ──────────────────────────────────
+   用户点名要有这一组开关。**每一项都是「这一局不启用」，绝不改数据** ——
+   关掉某个机制不许去删它对应的事件/分支/结局，那些是内容，不是机制。
+
+   引擎侧那几项（保底推进、结局门槛）有个硬约束：**引擎不读 localStorage**。
+   所以它们经 `world.rules` 传进去（`applyMechs()` 每局装配时覆盖一遍）。 */
+const RAIN_MECHANICS = Object.freeze([
+  { key: 'boundary', def: true, label: '当轮意愿与边界',
+    note: '推进前先看当轮意愿有没有登记；关掉＝不过这道闸，也不显示意愿卡' },
+  { key: 'stall', def: true, label: '保底推进（§13.3）',
+    note: '连续几轮没进展时把事件池收窄到推得起来的那些；关掉＝完全不干预' },
+  { key: 'resources', def: true, label: '资源调用（§18）',
+    note: '律师/银行/警方/管家/政界 的调用入口' },
+  { key: 'cards', def: true, label: '燕双鹰卡组（§5.1）',
+    note: '一次性卡片技能' },
+  { key: 'intimacy', def: true, label: '亲密状态卡（§23）',
+    note: '角色卡上的「亲密记录」一行' },
+  { key: 'triggers', def: true, label: '触发表（§16）',
+    note: '玩家原话命中关键词时，提示「相关但还没发生」的事件' },
+]);
+
+function mechDef(key) { return RAIN_MECHANICS.find(m => m.key === key); }
+
+/** 读一个机制开关；没存过就用它的默认值。 */
+function readMech(key) {
+  const def = mechDef(key);
+  const fallback = def ? def.def : true;
+  try {
+    const v = storage?.getItem(`ne.mech.${key}`);
+    return v === null || v === undefined ? fallback : v !== '0';
+  } catch { return fallback; }
 }
-function writeBoundary(on) {
-  try { storage?.setItem(BOUNDARY_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
+
+function writeMech(key, on) {
+  try { storage?.setItem(`ne.mech.${key}`, on ? '1' : '0'); } catch { /* 忽略 */ }
+}
+
+/** 雨夜的边界机制是否启用（默认开）—— 现在只是 readMech 的一层别名。 */
+function readBoundary() { return readMech('boundary'); }
+
+/**
+ * 把开关落到世界上。引擎侧那几项（stall / endingGate）靠这里生效。
+ * 每次装配世界、以及每次切换开关后都要调。
+ */
+function applyMechs(w) {
+  if (!w) return w;
+  if (w.rules) {
+    w.rules.stall = readMech('stall');
+  }
+  /* 边界机制关掉时**不挂闸门** —— 这是玩家的开关，不是改数据：
+     世界定义里的 guards 原样保留，只是这一局不启用。 */
+  if (!readMech('boundary')) w.guards = [];
+  return w;
 }
 
 /** 每轮正文末尾是否附状态卡（默认开）。引擎算的卡片，模型只负责搬。 */
@@ -819,9 +866,8 @@ function startMain(root, opts = {}) {
   // 从向导进来、或启动后才切模式时，类就漏了 —— 结果雨夜模式顶着浅色主题跑。
   document.body.classList.toggle('mode-rainnight', mode === 'rainnight');
   const world = createWorldFor(mode);
-  /* 边界机制关掉时不挂闸门 —— 这是玩家的开关，不是改数据：
-     世界定义里的 guards 原样保留，只是这一局不启用。 */
-  if (!readBoundary()) world.guards = [];
+  // 开关落到世界上（引擎侧的保底推进 / 结局门槛靠它）—— 见 applyMechs 的注释
+  applyMechs(world);
   const store = createStore(initialStateFor(mode));
   const SAVE_KEY = saveKeyFor(mode);
 
@@ -964,6 +1010,8 @@ function startMain(root, opts = {}) {
         /* 状态卡：直传 buildView —— 卡片要读的就是它的只读快照 */
         buildView: (s) => buildView(s, world),
         statusCard: readStatusCard(),
+        // 雨夜机制开关：director 不读 localStorage，由这里把读法递进去
+        mech: readMech,
       },
     });
   }
@@ -1439,7 +1487,7 @@ function startMain(root, opts = {}) {
     const slot = world.slotLabels?.[s.clock.slot] ?? s.clock.slot ?? '';
     head.appendChild(el('span', 'ne-msg-meta', `第 ${s.clock.day} 天 · ${slot}`));
     box.appendChild(head);
-    box.appendChild(textBox(scenePanelMarkup(s, world, { actorIds })));
+    box.appendChild(textBox(scenePanelMarkup(s, world, { actorIds, intimacy: readMech('intimacy') })));
     return box;
   }
 
@@ -1652,6 +1700,7 @@ function startMain(root, opts = {}) {
       }
       const btn = el('button', `ne-btn ne-res-btn${c.available ? '' : ' is-locked'}`, c.name);
       btn.type = 'button';
+      btn.dataset.kind = 'card';
       btn.dataset.sfx = 'toggle';
       btn.disabled = !c.available;
       btn.title = c.available
@@ -1686,6 +1735,8 @@ function startMain(root, opts = {}) {
       const row = el('div', 'ne-res');
       const btn = el('button', `ne-btn ne-res-btn${r.available ? '' : ' is-locked'}`, r.name);
       btn.type = 'button';
+      // 卡组那边复用了 .ne-res-btn 的样式，所以必须再给一个 kind 才分得清谁是谁
+      btn.dataset.kind = 'resource';
       btn.dataset.sfx = 'toggle';
       btn.disabled = !r.available;
       const hints = [...r.uses];
@@ -1730,12 +1781,12 @@ function startMain(root, opts = {}) {
     drawerLeft.appendChild(s2);
 
     // 雨夜专属：当轮意愿与边界。样式一直在，渲染一直没写 —— 现在补上。
-    if (mode === 'rainnight' && readBoundary()) drawerLeft.appendChild(consentSection(view));
+    if (mode === 'rainnight' && readMech('boundary')) drawerLeft.appendChild(consentSection(view));
 
     // 雨夜专属：§18 资源调用（律师朋友 / 银行渠道 / 警方熟人 / 管家团队 / 政界新星）
-    if (world.resources?.length) drawerLeft.appendChild(resourceSection());
+    if (world.resources?.length && readMech('resources')) drawerLeft.appendChild(resourceSection());
     // 雨夜专属：§5.1 燕双鹰卡组
-    if (world.cards?.length) drawerLeft.appendChild(cardSection());
+    if (world.cards?.length && readMech('cards')) drawerLeft.appendChild(cardSection());
 
     const s3 = el('section', 'ne-sec');
     s3.appendChild(el('h3', 'ne-sec-title', `线索 · ${view.clues.length}`));
@@ -2729,31 +2780,6 @@ function startMain(root, opts = {}) {
     volRow.append(volLabel, volInput);
     sec.appendChild(volRow);
 
-    /* 雨夜模式的专属机制开关：看模式**声明**了什么机制，不看 guards ——
-       guards 在机制关掉时会被清空，用它判断的话开关自己会消失、再也打不开。 */
-    if (world.rules?.consentEnforced === true) {
-      const mecRow = el('div', 'ne-field');
-      mecRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;';
-      mecRow.appendChild(el('span', 'ne-field-label', '边界机制'));
-      const mecBtn = el('button', 'ne-btn', readBoundary() ? '已开启' : '已关闭');
-      mecBtn.type = 'button';
-      mecBtn.dataset.sfx = 'toggle';
-      mecBtn.title = '关掉后不再拦推进，也不再显示「当轮意愿与边界」卡 —— 只想走剧情时用';
-      mecBtn.addEventListener('click', () => {
-        const next = !readBoundary();
-        writeBoundary(next);
-        mecBtn.textContent = next ? '已开启' : '已关闭';
-        appendSystem(next
-          ? '边界机制已开启 —— 推进前会先看当轮意愿有没有登记'
-          : '边界机制已关闭 —— 重新进入本局后生效（闸门与意愿卡一并收起）', 'warn');
-      });
-      mecRow.appendChild(mecBtn);
-      sec.appendChild(mecRow);
-      sec.appendChild(el('p', 'ne-modal-note',
-        '这是「雨夜模式」自带的机制：推进前先看当轮意愿是否登记，没登记就不放行。'
-        + '关掉它，故事照走，只是不再过这道闸。'));
-    }
-
     sec.appendChild(el('p', 'ne-modal-warn',
       '密钥只存在这台机器的浏览器里。导入的预设会覆盖采样参数与系统提示词。'));
 
@@ -3023,6 +3049,46 @@ function startMain(root, opts = {}) {
     pSave.appendChild(pSaveBtn);
     play.append(pName, pDesc, pSave);
     card.appendChild(playFold.sec);
+
+    /* ── 雨夜机制（2026-09-19） ──
+       用户点名要的一组开关。每一项只改**这一局启不启用**，绝不动数据 ——
+       关掉「燕双鹰卡组」不许去删那 8 张卡。引擎侧那几项（保底推进 / 结局门槛）
+       经 world.rules 生效，见 applyMechs()。 */
+    if (mode === 'rainnight') {
+      const onCount = RAIN_MECHANICS.filter(m => readMech(m.key)).length;
+      const mecFold = foldSection('雨夜机制', {
+        key: 'rainmech', note: `${onCount} / ${RAIN_MECHANICS.length} 启用`,
+      });
+      const mecSec = mecFold.body;
+
+      for (const m of RAIN_MECHANICS) {
+        const row = el('div', 'ne-field');
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;';
+        row.appendChild(el('span', 'ne-field-label', m.label));
+
+        const on0 = readMech(m.key);
+        const b = el('button', `ne-btn${on0 ? ' ne-btn-primary' : ''}`, on0 ? '已开启' : '已关闭');
+        b.type = 'button';
+        b.dataset.sfx = 'toggle';
+        b.title = m.note;
+        b.addEventListener('click', () => {
+          const next = !readMech(m.key);
+          writeMech(m.key, next);
+          b.textContent = next ? '已开启' : '已关闭';
+          b.classList.toggle('ne-btn-primary', next);
+          applyMechs(world);        // 引擎侧那几项立刻生效
+          render();
+          appendSystem(`雨夜机制「${m.label}」${next ? '已开启' : '已关闭'}`, next ? 'good' : 'warn');
+        });
+        row.appendChild(b);
+        mecSec.appendChild(row);
+      }
+
+      mecSec.appendChild(el('p', 'ne-modal-note',
+        '这些开关只改「这一局启不启用」，不会动任何数据 —— '
+        + '关掉某个机制，它对应的事件、分支、结局都还在，随时可以再打开。'));
+      card.appendChild(mecFold.sec);
+    }
 
     /* 模式与数据 */
     const miscFold = foldSection('模式与数据', { key: 'misc', note: mode === 'rainnight' ? '雨夜模式' : '茶馆标准' });

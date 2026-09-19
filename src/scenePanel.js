@@ -115,8 +115,11 @@ export function scenePanelMarkup(state, world = {}, opts = {}) {
     if (stats) rows.push(`数值 = ${stats}`);
 
     // §23 亲密状态：与 §4 的「当轮意愿与边界」并列，但记的是**已发生过什么**
-    const im = intimacyBoard(state, world, [id])[0];
-    if (im && (im.count > 0 || im.paused)) rows.push(`亲密记录 = ${intimacyLine(im)}`);
+    // 受「雨夜机制 → 亲密状态卡」开关控制（opts.intimacy === false 就不出这一行）
+    if (opts.intimacy !== false) {
+      const im = intimacyBoard(state, world, [id])[0];
+      if (im && (im.count > 0 || im.paused)) rows.push(`亲密记录 = ${intimacyLine(im)}`);
+    }
 
     out.push(`[${title}]`, ...rows, `[/${title}]`);
   }

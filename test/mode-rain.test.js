@@ -479,6 +479,32 @@ test('§16：没命中关键词时不注入任何东西', () => {
   assert.equal(triggerNote([], initialState(), w), '');
 });
 
+
+/* ── 雨夜机制开关：只测"真的接上了线"，不测"有这个字段" ── */
+
+test('雨夜机制：关掉保底推进 → 事件池完全不收窄', () => {
+  const mk = (id, line, big, priority) => ({
+    id, title: id, when: { day: 1 }, priority,
+    branches: [{ key: 'A', label: 'A', cond: null, text: '',
+      effects: big
+        ? [{ path: 'flags.a', op: 'set', value: true }, { path: 'flags.b', op: 'set', value: true },
+          { path: 'flags.c', op: 'set', value: true }, { path: 'flags.d', op: 'set', value: true }]
+        : [{ path: 'clues', op: 'push', value: 'C01' }] }],
+  });
+  const base = createWorld({ events: [mk('bigRel', '关系线', true, 1), mk('inv', '调查线', false, 99)] });
+  const on = { ...base, rules: { stall: true } };
+  const off = { ...base, rules: { stall: false } };
+  const st = createInitialState({});
+  const h = { turn: 1, eventId: 'x', branchKey: 'A', magnitude: '小', line: '调查线' };
+  const stalled = { ...st, history: [h, { ...h, turn: 2 }, { ...h, turn: 3 }, { ...h, turn: 4 }, { ...h, turn: 5 }] };
+
+  assert.equal(pickEvent(stalled, on).id, 'bigRel', '开着保底推进时应改选 bigRel');
+  assert.equal(pickEvent(stalled, off).id, 'inv', '关掉保底推进后应按优先级选 inv（不干预）');
+  // 没声明 rules 的世界保持旧行为（默认开）
+  const bare = createWorld({ events: [mk('bigRel', '关系线', true, 1), mk('inv', '调查线', false, 99)] });
+  assert.equal(pickEvent(stalled, bare).id, 'bigRel', '未声明 rules 的世界应保持默认开');
+});
+
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {
   const segs = parseCardMarkup('[林晚晴｜36岁 · 当前状态]\n情绪 = 焦虑\n[/林晚晴｜36岁 · 当前状态]');
   assert.equal(segs.length, 1);

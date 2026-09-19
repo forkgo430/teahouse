@@ -52,6 +52,16 @@ function isBlank(v) {
   return v === undefined || v === null || String(v).trim() === '';
 }
 
+/** 读一个点号路径上的数值；缺失返回 null（不抛）。 */
+function readNumber(state, path) {
+  let cur = state;
+  for (const seg of String(path ?? '').split('.')) {
+    if (cur === null || cur === undefined || typeof cur !== 'object') return null;
+    cur = cur[seg];
+  }
+  return Number.isFinite(cur) ? cur : null;
+}
+
 /**
  * 生成面板标记。
  *
@@ -110,6 +120,18 @@ export function scenePanelMarkup(state, world = {}, opts = {}) {
   const ledger = state.ledger ?? {};
   const ledgerRows = [];
   if (opts.roster) for (const [k, v] of Object.entries(opts.roster)) ledgerRows.push(`${k} = ${v}`);
+  /* §7：各条线各自的**状态词表**和通用五态不同名
+     （调查线：未开启/侦查/突破/收网/结案；事业线：未开启/起步/上升/掌权/定局）。
+     线名与词表由数据给，这里只做「阶段数 → 词」的映射。 */
+  if (Array.isArray(world.lines)) {
+    for (const ln of world.lines) {
+      const stages = ln.stages ?? [];
+      if (stages.length === 0) continue;
+      const raw = readNumber(state, ln.path);
+      const idx = Math.max(0, Math.min(stages.length - 1, raw ?? 0));
+      ledgerRows.push(`${ln.label} = ${stages[idx]}`);
+    }
+  }
   ledgerRows.push(`现金 = ${ledger.cash ?? 0}`);
   ledgerRows.push(`本轮收支 = 收入 ${ledger.income ?? 0} · 支出 ${ledger.expense ?? 0}`);
   out.push('[玩家与共同生活账本]', ...ledgerRows, '[/玩家与共同生活账本]');

@@ -5402,6 +5402,16 @@ export const RAINNIGHT_MODE = {
     achievements: ACHIEVEMENTS,
     endings: ENDINGS,
     events: EVENTS,
+
+    /* §7 各条线各有自己的状态词表，和通用五态不同名。
+       这里给「阶段数 → 词」的映射，面板照它显示。
+       调查线是 0–6（比词表长），所以按阶段铺开，不硬压成五格。 */
+    lines: [
+      { label: '调查案件线', path: 'flags.case_stage',
+        stages: ['未开启', '侦查', '侦查', '突破', '突破', '收网', '结案'] },
+      { label: '事业线', path: 'flags.career_stage',
+        stages: ['未开启', '起步', '上升', '掌权', '定局'] },
+    ],
   },
 
   /** 边界 guard：雨夜模式的推进全部要过当轮同意 */
@@ -5424,6 +5434,7 @@ export function createRainWorld(createWorldFn) {
     actorLabels: w.actorLabels,
     statLabels: w.statLabels,
     worldbook: w.worldbook,
+    lines: w.lines,
     guards: RAINNIGHT_MODE.guards(),
     /* 模式级字段也要交给世界 —— 它们本来就在 RAINNIGHT_MODE 顶层躺着，
        但从没被传下去：UI 判 `world.rainLevel > 0` 决定起不起 BGM，

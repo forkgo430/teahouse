@@ -76,7 +76,8 @@ export const NARRATOR_OPTIONS = [
 ];
 
 export const DEFAULT_STYLE = Object.freeze({
-  person: 'second',
+  // 用户口径：茶馆/雨夜默认都是第三人称
+  person: 'third',
   lang: 'zh',
   length: 'normal',
   narrator: 'narrator',

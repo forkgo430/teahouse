@@ -22,11 +22,15 @@ import {
   NARRATION_SYSTEM,
 } from '../src/style.js';
 
-/** 重构前 src/narrator.js 里那段写死的提示词，原样抄来做基线 */
+/**
+ * 默认配置的基线（原本是重构前 narrator.js 里写死的那段）。
+ * ⚠ 用户口径改动过一次：默认人称由「第二人称」改为**第三人称**，
+ *   所以这里第 1 条随之更新 —— 这是**有意的契约变更**，不是把断言改宽。
+ */
 const LEGACY = `你是互动叙事引擎里的「叙述者」。
 
 写作要求：
-1. 用第二人称「你」写，中文，450 到 620 字。
+1. 用第三人称写，以玩家角色的名字指代玩家。用中文写作。篇幅控制在 450 到 620 字，动作、对白、环境各给到，别太铺张。
 2. 只输出正文本身。不要标题、不要解释、不要数值、不要字段名、不要 JSON、不要 markdown 标记。
 3. 上面列出的「已经发生的变化」是既成事实。你的描写必须与它一致，不能出现与之矛盾的细节。
 4. 不要替玩家做新的决定，写到玩家面对下一个选择之前就停。
@@ -47,7 +51,8 @@ test('不传参数时走默认配置', () => {
 
 test('归一化：缺字段补默认值', () => {
   const s = normalizeStyle({});
-  assert.equal(s.person, 'second');
+  // 用户口径：默认第三人称（原为 second）
+  assert.equal(s.person, 'third');
   assert.equal(s.lang, 'zh');
   assert.equal(s.length, 'normal');
   assert.equal(s.extra, '');
@@ -56,7 +61,7 @@ test('归一化：缺字段补默认值', () => {
 
 test('归一化：脏值退回默认，不抛错', () => {
   const s = normalizeStyle({ person: '不存在的选项', lang: 42, length: null });
-  assert.equal(s.person, 'second');
+  assert.equal(s.person, 'third');
   assert.equal(s.lang, 'zh');
   assert.equal(s.length, 'normal');
 });

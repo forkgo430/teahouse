@@ -12,9 +12,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { RAINNIGHT_MODE, RAIN_PATHS, createRainWorld, rainInitialState } from '../data/mode-rain.js';
-import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch } from '../src/engine.js';
+import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch, pickEvent } from '../src/engine.js';
 import { createDemoWorld } from '../data/demo.js';
 import { createInitialState, validateEventSet, validateCondition } from '../src/schema.js';
+import { parseCardMarkup } from '../src/card.js';
 import { applyEffects, createStore } from '../src/state.js';
 import { evaluate } from '../src/condition.js';
 import {
@@ -72,6 +73,84 @@ test('事件集能过一次 schema 校验（非法数据不许静默通过）', 
 });
 
 /* ---------------------------------------------------------------- *
+ * P2 版式（2026-09-19）
+ * 开场迁到了声明式标记上。这里断言它**真的被解析成组件**，
+ * 而不是退化成一大段纯文本 —— 后者正是改造前"页面只剩纯文本"的样子。
+ * ---------------------------------------------------------------- */
+
+test('开场按 P2 版式排布，且每张卡都能被识别成组件', () => {
+  const segs = parseCardMarkup(RAINNIGHT_MODE.world.opening);
+  const blocks = segs.filter(s => s.type === 'block');
+
+  assert.deepEqual(
+    blocks.map(s => s.kind),
+    ['scene', 'stats', 'thought', 'stats', 'thought', 'stats', 'list'],
+    '开场块序列不符：局面 / 林晚晴卡 / 内心 / 周若宁卡 / 内心 / 账本 / 线索',
+  );
+
+  const titles = blocks.map(s => s.title);
+  for (const t of ['当前局面', '林晚晴｜36岁 · 当前状态', '周若宁｜18岁 · 当前状态',
+    '玩家与共同生活账本', '债务线索与长期事件']) {
+    assert.ok(titles.includes(t), `标题未被识别成区块：${t}`);
+  }
+
+  // 正文段不能被吞掉
+  assert.ok(
+    segs.some(s => s.type === 'text' && s.text.includes('敲得很轻')),
+    '开场正文丢了',
+  );
+});
+
+/* ---------------------------------------------------------------- *
+ * §13.2 线名/幅度 · §13.3 规则3 保底推进（2026-09-19）
+ * ---------------------------------------------------------------- */
+
+test('线名与幅度从 effects 推导，且与分支实际改动一致', () => {
+  const w = world();
+  const opts = buildOptions(initialState(), w.events.find(e => e.id === 'R02'), w);
+  assert.ok(opts.every(o => o.line === '调查线'), 'R02 各分支应全归调查线');
+  assert.ok(opts.some(o => o.magnitude === '大'), 'R02 应有大分支');
+
+  const r01 = buildOptions(initialState(), w.events.find(e => e.id === 'R01'), w);
+  assert.equal(r01.find(o => o.key === 'C').line, '关系线');
+  assert.equal(r01.find(o => o.key === 'A').magnitude, '大');
+});
+
+test('§13.3 规则3：三连「小」之后优先挑带大分支的事件', () => {
+  const mk = (id, big, priority) => ({
+    id,
+    title: id,
+    when: { day: 1 },
+    priority,
+    branches: [{
+      key: 'A',
+      label: 'A',
+      cond: null,
+      text: '',
+      effects: big
+        ? [{ path: 'flags.a', op: 'set', value: true }, { path: 'flags.b', op: 'set', value: true },
+          { path: 'flags.c', op: 'set', value: true }, { path: 'flags.d', op: 'set', value: true }]
+        : [{ path: 'actors.self.stats.pressure', op: 'add', value: 1 }],
+    }],
+  });
+  // small 的优先级更高 —— 没停摆时它必然被选；停摆后应改选 big
+  const w = createWorld({ events: [mk('small', false, 99), mk('big', true, 1)] });
+  const base = createInitialState({});
+  const h = { turn: 1, eventId: 'small', branchKey: 'A', magnitude: '小', line: '关系线' };
+  const stalled = { ...base, history: [h, { ...h, turn: 2 }, { ...h, turn: 3 }] };
+
+  assert.equal(pickEvent(base, w).id, 'small', '未停摆时应按优先级选 small');
+  assert.equal(pickEvent(stalled, w).id, 'big', '三连「小」之后应改选带大分支的 big');
+});
+
+test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {
+  const segs = parseCardMarkup('[林晚晴｜36岁 · 当前状态]\n情绪 = 焦虑\n[/林晚晴｜36岁 · 当前状态]');
+  assert.equal(segs.length, 1);
+  assert.equal(segs[0].type, 'block');
+  assert.equal(segs[0].kind, 'stats');
+});
+
+/* ---------------------------------------------------------------- *
  * 跑得动
  * ---------------------------------------------------------------- */
 
@@ -79,12 +158,17 @@ function autoplay(pick, maxTurns = 40) {
   const w = world();
   let state = initialState();
   const visited = new Set();
+  // 契约变更（2026-09-19）：事件改为按真实天数排期（day 1–219），
+  // 大多数日子没有事件。「当天无事件」现在是正常流程 —— 时钟应继续推进，
+  // 而不是像旧版那样直接结束。连续空转超过阈值才停，防止死循环。
+  let idle = 0;
 
   for (let i = 0; i < maxTurns; i++) {
     if (state.endings.length > 0) break;
     const opened = nextTurn(state, w);
-    if (!opened.event) break;
     state = opened.state;
+    if (!opened.event) { if (++idle > 60) break; continue; }
+    idle = 0;
     const usable = opened.options.filter(o => o.available);
     if (usable.length === 0) break;
     const opt = pick(usable, opened, i) ?? usable[0];
@@ -102,14 +186,22 @@ test('自动跑 40 轮不抛，且真的推进了事件', () => {
   assert.ok(state.history.length >= 3, `history 只有 ${state.history.length} 条`);
 });
 
-test('两条主要走向都能走到结局', () => {
-  const accept = autoplay((usable) => usable.find(o => o.label.includes('接')) ?? usable[0]);
-  assert.ok(accept.state.flags.took_case || accept.state.endings.length > 0,
-    '选了「接下」却没落 took_case，也没走到结局');
+test('两条主要走向都能推进剧情，且都不会在第 60 天之前结算', () => {
+  // 契约变更（2026-09-19）：结局改为「推进到最后」才结算（day > 60）。
+  // 旧用例断言「选几轮就走到结局」，那是被 END_B2/END_B3 互补条件蒙出来的假通过，
+  // 且引用的 flags.took_case 在数据里根本不存在。现按新契约改为：
+  // ①两条走向都能推进剧情；②若已结算，结算日必须在第 60 天之后。
+  const accept = autoplay((usable) => usable.find(o => o.label.includes('接')) ?? usable[0], 120);
+  assert.ok(accept.visited.size >= 3, `「接」路径只推进了 ${accept.visited.size} 个事件`);
 
-  const decline = autoplay((usable) => usable.find(o => o.label.includes('婉拒')) ?? usable[0]);
-  assert.ok(decline.state.flags.declined || decline.state.endings.length > 0,
-    '选了「婉拒」却没落 declined，也没走到结局');
+  const decline = autoplay((usable) => usable.find(o => o.label.includes('拒')) ?? usable[0], 120);
+  assert.ok(decline.visited.size >= 3, `「拒」路径只推进了 ${decline.visited.size} 个事件`);
+
+  for (const r of [accept, decline]) {
+    if (r.state.endings.length > 0) {
+      assert.ok(r.state.clock.day > 60, `结算得太早：第 ${r.state.clock.day} 天`);
+    }
+  }
 });
 
 test('每个事件的首个分支在初始状态下都能选中（不留死角）', () => {
@@ -442,9 +534,12 @@ test('每个事件的每个分支都能真的走一遍（effects 路径全部合
   }
 });
 
-test('自动跑到底会落到一个结局，且线索不会跳阶段', () => {
-  const { state } = autoplay((usable) => usable[0], 60);
-  assert.ok(state.endings.length > 0, '跑了 60 轮都没结局');
+test('自动跑到底会落到一个结局，且结局在第 60 天之后、线索不跳阶段', () => {
+  // 契约变更（2026-09-19）：结局门槛加了 day > 60，60 轮已不足以跑到结算日，
+  // 这里放宽到 200 轮，并新增「结算日必须 > 60」的断言。
+  const { state } = autoplay((usable) => usable[0], 200);
+  assert.ok(state.endings.length > 0, '跑了 200 轮都没结局');
+  assert.ok(state.clock.day > 60, `结局在第 ${state.clock.day} 天结算，早于门槛`);
 
   // 阶段不可跳：没有 D3 就不该有 D5 —— D5 只在 R21 之后释放
   if (state.clues.includes('D5')) {

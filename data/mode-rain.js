@@ -291,7 +291,7 @@ const EVENTS = [
   {
     id: 'R03',
     title: '第一晚与清晨',
-    when: { day: 1, slot: 'dawn' },
+    when: { day: 2, slot: 'dawn' },
     priority: 180,
     actors: ['seeker', 'kin'],
     require: { path: 'flags.heard_debt', op: '==', value: true },
@@ -342,7 +342,7 @@ const EVENTS = [
   {
     id: 'R04',
     title: '阳台上的那一夜',
-    when: { day: 1, slot: 'night' },
+    when: { day: 2, slot: 'night' },
     priority: 170,
     actors: ['kin'],
     require: {
@@ -393,7 +393,7 @@ const EVENTS = [
   {
     id: 'R05',
     title: '把资源摆上桌',
-    when: { day: 1, slot: 'morning' },
+    when: { day: 3, slot: 'morning' },
     priority: 160,
     actors: ['self'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -440,7 +440,7 @@ const EVENTS = [
   {
     id: 'R06',
     title: '租约与校服',
-    when: { day: 1, slot: 'morning' },
+    when: { day: 4, slot: 'morning' },
     priority: 150,
     actors: ['seeker', 'kin'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -490,7 +490,7 @@ const EVENTS = [
   {
     id: 'R07',
     title: '校门口的第三辆车',
-    when: { day: 1, slot: 'evening' },
+    when: { day: 5, slot: 'evening' },
     priority: 145,
     actors: ['kin', 'collector'],
     require: {
@@ -545,7 +545,7 @@ const EVENTS = [
   {
     id: 'R08',
     title: '律师首询与归档',
-    when: { day: 2, slot: 'morning' },
+    when: { day: 14, slot: 'morning' },
     priority: 140,
     actors: ['seeker'],
     require: { path: 'flags.case_stage', op: '>=', value: 1 },
@@ -595,7 +595,7 @@ const EVENTS = [
   {
     id: 'R09',
     title: '账面上的四个名字',
-    when: { day: 2, slot: 'morning' },
+    when: { day: 6, slot: 'morning' },
     priority: 135,
     actors: ['seeker', 'self'],
     require: { path: 'flags.case_stage', op: '>=', value: 2 },
@@ -645,7 +645,7 @@ const EVENTS = [
   {
     id: 'R10',
     title: '为什么帮我',
-    when: { day: 2, slot: 'night' },
+    when: { day: 15, slot: 'night' },
     priority: 130,
     actors: ['seeker'],
     require: { path: 'actors.seeker.stats.pressure', op: '>=', value: 60 },
@@ -703,7 +703,7 @@ const EVENTS = [
   {
     id: 'R11',
     title: '一通急于撇清的电话',
-    when: { day: 2, slot: 'afternoon' },
+    when: { day: 16, slot: 'afternoon' },
     priority: 125,
     actors: ['self'],
     require: { path: 'flags.case_stage', op: '>=', value: 2 },
@@ -759,7 +759,7 @@ const EVENTS = [
   {
     id: 'R12',
     title: '842 是套牌',
-    when: { day: 2, slot: 'night' },
+    when: { day: 18, slot: 'night' },
     priority: 120,
     actors: ['self', 'collector'],
     require: { path: 'clues', op: 'contains', value: 'S1' },
@@ -807,7 +807,7 @@ const EVENTS = [
   {
     id: 'R13',
     title: '两个人浮出水面',
-    when: { day: 2, slot: 'afternoon' },
+    when: { day: 19, slot: 'afternoon' },
     priority: 115,
     actors: ['self'],
     require: { path: 'flags.case_stage', op: '>=', value: 3 },
@@ -871,7 +871,7 @@ const EVENTS = [
   {
     id: 'R14',
     title: '衣柜顶上的旧照片',
-    when: { day: 2, slot: 'evening' },
+    when: { day: 21, slot: 'evening' },
     priority: 110,
     actors: ['kin'],
     require: { path: 'actors.kin.stats.safety', op: '<=', value: 60 },
@@ -980,7 +980,7 @@ const EVENTS = [
   {
     id: 'R16',
     title: '842，第三次',
-    when: { day: 2, slot: 'evening' },
+    when: { day: 23, slot: 'evening' },
     priority: 100,
     actors: ['collector', 'kin'],
     require: { path: 'clues', op: 'contains', value: 'S1' },
@@ -1029,7 +1029,7 @@ const EVENTS = [
   {
     id: 'R17',
     title: '律师函与账户保全',
-    when: { day: 3, slot: 'morning' },
+    when: { day: 35, slot: 'morning' },
     priority: 95,
     actors: ['self'],
     require: { path: 'flags.case_stage', op: '>=', value: 3 },
@@ -1076,7 +1076,7 @@ const EVENTS = [
   {
     id: 'R18',
     title: '医院走廊里的一句证词',
-    when: { day: 3, slot: 'afternoon' },
+    when: { day: 38, slot: 'afternoon' },
     priority: 90,
     actors: ['seeker', 'self'],
     require: { path: 'flags.case_stage', op: '>=', value: 3 },
@@ -1125,7 +1125,7 @@ const EVENTS = [
   {
     id: 'R19',
     title: '体检报告',
-    when: { day: 3, slot: 'morning' },
+    when: { day: 44, slot: 'morning' },
     priority: 85,
     actors: ['seeker'],
     require: { path: 'actors.seeker.stats.weary', op: '>=', value: 70 },
@@ -1171,7 +1171,7 @@ const EVENTS = [
   {
     id: 'R20',
     title: '她一个人走的那条路',
-    when: { day: 2, slot: 'afternoon' },
+    when: { day: 16, slot: 'afternoon' },
     priority: 80,
     actors: ['kin'],
     require: { path: 'actors.kin.stats.safety', op: '<=', value: 25 },
@@ -1221,7 +1221,7 @@ const EVENTS = [
   {
     id: 'R21',
     title: '中间人反水',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 74, slot: 'afternoon' },
     priority: 75,
     actors: ['self'],
     require: { path: 'flags.case_stage', op: '>=', value: 4 },
@@ -1270,7 +1270,7 @@ const EVENTS = [
   {
     id: 'R22',
     title: '失踪者的电话',
-    when: { day: 4, slot: 'night' },
+    when: { day: 81, slot: 'night' },
     priority: 70,
     actors: ['seeker'],
     require: { path: 'flags.case_stage', op: '>=', value: 5 },
@@ -1333,7 +1333,7 @@ const EVENTS = [
   {
     id: 'R23',
     title: '立案那天',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 84, slot: 'morning' },
     priority: 65,
     actors: ['seeker'],
     require: { path: 'flags.case_stage', op: '>=', value: 6 },
@@ -1382,7 +1382,7 @@ const EVENTS = [
   {
     id: 'R24',
     title: '年前最后一次催收',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 117, slot: 'afternoon' },
     priority: 60,
     actors: ['collector', 'seeker'],
     require: { path: 'flags.case_stage', op: '>=', value: 2 },
@@ -1442,7 +1442,7 @@ const EVENTS = [
   {
     id: 'R25',
     title: '清明，去见他',
-    when: { day: 5, slot: 'morning' },
+    when: { day: 192, slot: 'morning' },
     priority: 55,
     actors: ['seeker', 'kin'],
     require: { path: 'flags.case_stage', op: '>=', value: 6 },
@@ -1500,7 +1500,7 @@ const EVENTS = [
   {
     id: 'R26',
     title: '搬家与否',
-    when: { day: 5, slot: 'afternoon' },
+    when: { day: 219, slot: 'afternoon' },
     priority: 50,
     actors: ['seeker', 'kin'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -1621,7 +1621,7 @@ const EVENTS = [
   {
     id: 'R29',
     title: '一年的信',
-    when: { day: 5 },
+    when: { day: 190 },
     priority: 210,
     actors: ['seeker', 'kin'],
     require: { path: 'flags.case_stage', op: '>=', value: 6 },
@@ -2001,7 +2001,7 @@ const EVENTS = [
   {
     id: 'E11',
     title: '物理课与期中',
-    when: { day: 2, slot: 'morning' },
+    when: { day: 16, slot: 'morning' },
     priority: 157,
     actors: ['kin'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -2058,7 +2058,7 @@ const EVENTS = [
   {
     id: 'E13',
     title: '西餐试探与第一次拒绝',
-    when: { day: 2, slot: 'evening' },
+    when: { day: 17, slot: 'evening' },
     priority: 152,
     actors: ['seeker', 'kin'],
     require: { path: 'actors.seeker.stats.trust', op: '>=', value: 40 },
@@ -2115,7 +2115,7 @@ const EVENTS = [
   {
     id: 'E17',
     title: '总监助理的提醒',
-    when: { day: 2, slot: 'morning' },
+    when: { day: 24, slot: 'morning' },
     priority: 128,
     actors: ['self'],
     require: { path: 'flags.career_stage', op: '>=', value: 1 },
@@ -2171,7 +2171,7 @@ const EVENTS = [
   {
     id: 'E18',
     title: '雷雨夜她怕黑',
-    when: { day: 2, slot: 'night' },
+    when: { day: 22, slot: 'night' },
     priority: 122,
     actors: ['kin'],
     require: {
@@ -2225,7 +2225,7 @@ const EVENTS = [
   {
     id: 'E20',
     title: '她说她不怕了之后',
-    when: { day: 3, slot: 'night' },
+    when: { day: 27, slot: 'night' },
     priority: 118,
     actors: ['kin'],
     require: {
@@ -2278,7 +2278,7 @@ const EVENTS = [
   {
     id: 'E21',
     title: '深夜她主动过来',
-    when: { day: 3, slot: 'night' },
+    when: { day: 28, slot: 'night' },
     priority: 116,
     actors: ['seeker'],
     require: {
@@ -2332,7 +2332,7 @@ const EVENTS = [
   {
     id: 'E22',
     title: '凌晨，门没关严',
-    when: { day: 3, slot: 'dawn' },
+    when: { day: 29, slot: 'dawn' },
     priority: 114,
     actors: ['seeker'],
     require: { path: 'flags.seeker_initiated', op: '==', value: true },
@@ -2391,7 +2391,7 @@ const EVENTS = [
   {
     id: 'E25',
     title: '平阳行',
-    when: { day: 3 },
+    when: { day: 37 },
     priority: 112,
     actors: ['seeker', 'kin', 'lost'],
     require: {
@@ -2457,7 +2457,7 @@ const EVENTS = [
   {
     id: 'E27',
     title: '她说不舒服，没说哪里',
-    when: { day: 3, slot: 'morning' },
+    when: { day: 42, slot: 'morning' },
     priority: 108,
     actors: ['kin'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -2504,7 +2504,7 @@ const EVENTS = [
   {
     id: 'E28',
     title: '她问你为什么帮',
-    when: { day: 2, slot: 'night' },
+    when: { day: 15, slot: 'night' },
     priority: 104,
     actors: ['kin', 'seeker'],
     require: { path: 'actors.kin.stats.trust', op: '>=', value: 50 },
@@ -2562,7 +2562,7 @@ const EVENTS = [
   {
     id: 'E29',
     title: '说谢谢的那个晚上',
-    when: { day: 3, slot: 'night' },
+    when: { day: 49, slot: 'night' },
     priority: 102,
     actors: ['seeker', 'kin'],
     require: {
@@ -2628,7 +2628,7 @@ const EVENTS = [
   {
     id: 'E30',
     title: '她的杀手锏没有拿出来',
-    when: { day: 3, slot: 'night' },
+    when: { day: 38, slot: 'night' },
     priority: 98,
     actors: ['seeker'],
     require: {
@@ -2694,7 +2694,7 @@ const EVENTS = [
   {
     id: 'E31',
     title: '她的两种求法',
-    when: { day: 3, slot: 'night' },
+    when: { day: 58, slot: 'night' },
     priority: 96,
     actors: ['kin'],
     require: {
@@ -2761,7 +2761,7 @@ const EVENTS = [
   {
     id: 'E32',
     title: '复查与那段禁口期',
-    when: { day: 4 },
+    when: { day: 60 },
     priority: 92,
     actors: ['kin'],
     require: { path: 'flags.cared_her', op: '==', value: true },
@@ -2823,7 +2823,7 @@ const EVENTS = [
   {
     id: 'E33',
     title: '北京见方队',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 63, slot: 'morning' },
     priority: 154,
     actors: ['self', 'seeker'],
     require: { path: 'flags.case_stage', op: '>=', value: 3 },
@@ -2872,7 +2872,7 @@ const EVENTS = [
   {
     id: 'E34',
     title: '见郑远',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 65, slot: 'afternoon' },
     priority: 127,
     actors: ['self'],
     require: { path: 'flags.career_stage', op: '>=', value: 2 },
@@ -2917,7 +2917,7 @@ const EVENTS = [
   {
     id: 'E35',
     title: '北京那一晚的答案',
-    when: { day: 4, slot: 'night' },
+    when: { day: 68, slot: 'night' },
     priority: 123,
     actors: ['self'],
     require: { path: 'flags.line_suwan', op: '==', value: true },
@@ -2962,7 +2962,7 @@ const EVENTS = [
   {
     id: 'E36',
     title: '咖啡厅的见面',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 70, slot: 'afternoon' },
     priority: 119,
     actors: ['self'],
     require: { path: 'flags.career_stage', op: '>=', value: 2 },
@@ -3004,7 +3004,7 @@ const EVENTS = [
   {
     id: 'E37',
     title: '长春行',
-    when: { day: 4 },
+    when: { day: 72 },
     priority: 117,
     actors: ['self'],
     require: { path: 'flags.line_xunuo', op: '==', value: true },
@@ -3048,7 +3048,7 @@ const EVENTS = [
   {
     id: 'E39',
     title: '寒假，另一个孩子来了',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 94, slot: 'morning' },
     priority: 111,
     actors: ['self', 'seeker', 'kin'],
     require: { path: 'flags.line_suwan', op: '==', value: true },
@@ -3106,7 +3106,7 @@ const EVENTS = [
   {
     id: 'E42',
     title: '生日会上的位置',
-    when: { day: 4, slot: 'evening' },
+    when: { day: 105, slot: 'evening' },
     priority: 109,
     actors: ['kin'],
     require: { path: 'actors.kin.stats.trust', op: '>=', value: 70 },
@@ -3164,7 +3164,7 @@ const EVENTS = [
   {
     id: 'E43',
     title: '家长会',
-    when: { day: 4, slot: 'evening' },
+    when: { day: 88, slot: 'evening' },
     priority: 103,
     actors: ['kin', 'seeker'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -3211,7 +3211,7 @@ const EVENTS = [
   {
     id: 'E45',
     title: '接机与公司的旧人',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 76, slot: 'afternoon' },
     priority: 101,
     actors: ['self'],
     require: { path: 'flags.line_suwan', op: '==', value: true },
@@ -3264,7 +3264,7 @@ const EVENTS = [
   {
     id: 'E46',
     title: '新助理报到',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 102, slot: 'morning' },
     priority: 99,
     actors: ['self'],
     require: { path: 'flags.career_stage', op: '>=', value: 2 },
@@ -3308,7 +3308,7 @@ const EVENTS = [
   {
     id: 'E47',
     title: '公司里的人',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 109, slot: 'morning' },
     priority: 97,
     actors: ['self'],
     require: { path: 'flags.career_stage', op: '>=', value: 3 },
@@ -3353,7 +3353,7 @@ const EVENTS = [
   {
     id: 'E48',
     title: '饭局的两个问题',
-    when: { day: 4, slot: 'evening' },
+    when: { day: 86, slot: 'evening' },
     priority: 93,
     actors: ['self', 'seeker'],
     require: { path: 'flags.career_stage', op: '>=', value: 3 },
@@ -3411,7 +3411,7 @@ const EVENTS = [
   {
     id: 'E49',
     title: '她进考场那天',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 122, slot: 'morning' },
     priority: 89,
     actors: ['kin'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -3458,7 +3458,7 @@ const EVENTS = [
   {
     id: 'E50',
     title: '去学校报到',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 127, slot: 'morning' },
     priority: 88,
     actors: ['kin'],
     require: { path: 'flags.gaokao_sent', op: '==', value: true },
@@ -3505,7 +3505,7 @@ const EVENTS = [
   {
     id: 'E51',
     title: '她要去当店长',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 138, slot: 'afternoon' },
     priority: 87,
     actors: ['seeker'],
     require: { path: 'flags.kin_enrolled', op: '==', value: true },
@@ -3552,7 +3552,7 @@ const EVENTS = [
   {
     id: 'E52',
     title: '邻居的第一句',
-    when: { day: 5, slot: 'evening' },
+    when: { day: 148, slot: 'evening' },
     priority: 83,
     actors: ['seeker'],
     require: { path: 'flags.took_them_in', op: '==', value: true },
@@ -3595,7 +3595,7 @@ const EVENTS = [
   {
     id: 'E53',
     title: '图书馆里那个学长',
-    when: { day: 5, slot: 'afternoon' },
+    when: { day: 158, slot: 'afternoon' },
     priority: 82,
     actors: ['kin'],
     require: { path: 'flags.kin_enrolled', op: '==', value: true },
@@ -3642,7 +3642,7 @@ const EVENTS = [
   {
     id: 'E54',
     title: '片场怎么说话',
-    when: { day: 5, slot: 'afternoon' },
+    when: { day: 171, slot: 'afternoon' },
     priority: 81,
     actors: ['self'],
     require: { path: 'flags.line_jingtian', op: '==', value: true },
@@ -3685,7 +3685,7 @@ const EVENTS = [
   {
     id: 'E55',
     title: '补课这件事',
-    when: { day: 5, slot: 'evening' },
+    when: { day: 176, slot: 'evening' },
     priority: 79,
     actors: ['kin'],
     require: { path: 'flags.kin_enrolled', op: '==', value: true },
@@ -3732,7 +3732,7 @@ const EVENTS = [
   {
     id: 'E56',
     title: '董事会里的老派',
-    when: { day: 5, slot: 'morning' },
+    when: { day: 205, slot: 'morning' },
     priority: 78,
     actors: ['self'],
     require: { path: 'flags.career_stage', op: '>=', value: 4 },
@@ -3821,7 +3821,7 @@ const EVENTS = [
   {
     id: 'B04',
     title: '她拿出最后那张牌',
-    when: { day: 3, slot: 'night' },
+    when: { day: 38, slot: 'night' },
     priority: 121,
     actors: ['seeker'],
     require: { path: 'actors.seeker.stats.pressure', op: '>=', value: 85 },
@@ -3871,7 +3871,7 @@ const EVENTS = [
   {
     id: 'B05',
     title: '她的告白',
-    when: { day: 4, slot: 'night' },
+    when: { day: 100, slot: 'night' },
     priority: 113,
     actors: ['kin'],
     require: { path: 'actors.kin.stats.trust', op: '>=', value: 85 },
@@ -3919,7 +3919,7 @@ const EVENTS = [
   {
     id: 'B06',
     title: '她说她要自己挣钱',
-    when: { day: 4, slot: 'evening' },
+    when: { day: 100, slot: 'evening' },
     priority: 107,
     actors: ['seeker'],
     require: { path: 'flags.seeker_independent', op: '==', value: true },
@@ -3965,7 +3965,7 @@ const EVENTS = [
   {
     id: 'B07',
     title: '她问你要一个答案',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 100, slot: 'afternoon' },
     priority: 106,
     actors: ['self'],
     require: { path: 'flags.line_suwan', op: '==', value: true },
@@ -4008,7 +4008,7 @@ const EVENTS = [
   {
     id: 'B08',
     title: '她的音乐会',
-    when: { day: 4, slot: 'evening' },
+    when: { day: 100, slot: 'evening' },
     priority: 94,
     actors: ['self'],
     require: { path: 'flags.line_xunuo', op: '==', value: true },
@@ -4052,7 +4052,7 @@ const EVENTS = [
   {
     id: 'B09',
     title: '这条线要收到哪里',
-    when: { day: 4, slot: 'evening' },
+    when: { day: 100, slot: 'evening' },
     priority: 91,
     actors: ['self'],
     require: { path: 'flags.line_jingtian', op: '==', value: true },
@@ -4094,7 +4094,7 @@ const EVENTS = [
   {
     id: 'B10',
     title: '中午只有你们两个',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 100, slot: 'afternoon' },
     priority: 86,
     actors: ['self'],
     require: { path: 'flags.line_shenzhiyi', op: '==', value: true },
@@ -4137,7 +4137,7 @@ const EVENTS = [
   {
     id: 'B11',
     title: '他手里还剩一点东西',
-    when: { day: 4, slot: 'morning' },
+    when: { day: 100, slot: 'morning' },
     priority: 84,
     actors: ['self', 'collector'],
     require: { path: 'clues', op: 'contains', value: 'X2' },
@@ -4182,7 +4182,7 @@ const EVENTS = [
   {
     id: 'B12',
     title: '她的选择',
-    when: { day: 4, slot: 'afternoon' },
+    when: { day: 100, slot: 'afternoon' },
     priority: 76,
     actors: ['self'],
     require: { path: 'clues', op: 'contains', value: 'X3' },
@@ -4228,7 +4228,7 @@ const EVENTS = [
   {
     id: 'B13',
     title: '他的提醒',
-    when: { day: 4, slot: 'evening' },
+    when: { day: 100, slot: 'evening' },
     priority: 74,
     actors: ['self'],
     require: { path: 'flags.police_line', op: '==', value: true },
@@ -4273,7 +4273,7 @@ const EVENTS = [
   {
     id: 'B14',
     title: '任命之前的那道题',
-    when: { day: 5, slot: 'morning' },
+    when: { day: 190, slot: 'morning' },
     priority: 72,
     actors: ['self'],
     require: { path: 'flags.career_stage', op: '>=', value: 4 },
@@ -4328,6 +4328,9 @@ const EVENTS = [
    这里用 history 的下标存在性当轮次信号，比给 state 新加字段轻。 */
 const MIN_TURNS = 6;
 const afterTurns = (n) => ({ path: `history[${n - 1}]`, op: 'exists' });
+/** 结局门槛：剧情推进到最后（真实天数 > N）才允许结算 */
+const END_MIN_DAY = 60;
+const atDay = (n) => ({ path: 'clock.day', op: '>', value: n });
 
 const ENDINGS = [
   {
@@ -4338,6 +4341,7 @@ const ENDINGS = [
     note: '信任塌到底之后，屋子还在，人散了。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'actors.seeker.stats.trust', op: '<=', value: 20 },
       ],
@@ -4351,6 +4355,7 @@ const ENDINGS = [
     note: '空壳、走账、套牌 —— 你终于看清了整张网，也包括自己在里面。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         { path: 'flags.case_stage', op: '>=', value: 6 },
         { path: 'clues', op: 'contains', value: 'D5' },
       ],
@@ -4364,6 +4369,7 @@ const ENDINGS = [
     note: '他回来了，并且把该认的都认了。这不算圆满，但算结算。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         { path: 'flags.believed_him', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 6 },
       ],
@@ -4377,6 +4383,7 @@ const ENDINGS = [
     note: '你在同一个地方，信了同一个人两次。第二次代价更大。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         { path: 'flags.played_along', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 6 },
       ],
@@ -4390,6 +4397,7 @@ const ENDINGS = [
     note: '账是清了。她要还的，从此变成另一种东西。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.paid_off', op: '==', value: true },
       ],
@@ -4403,6 +4411,7 @@ const ENDINGS = [
     note: '没有惊雷。客厅一盏灯，书房一盏灯，都亮着。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         { path: 'flags.took_them_in', op: '==', value: true },
         { path: 'flags.their_choice', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 6 },
@@ -4417,6 +4426,7 @@ const ENDINGS = [
     note: '船开走的时候，她站在岸上，没有哭。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         { path: 'flags.they_chose', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 4 },
       ],
@@ -4430,6 +4440,7 @@ const ENDINGS = [
     note: '三间房的钥匙交了，最后一箱书搬上楼，天就亮了。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.moved_together', op: '==', value: true },
       ],
@@ -4443,6 +4454,7 @@ const ENDINGS = [
     note: '你摸到了主干的形状，但没有摸到最后那一节。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.case_stage', op: '>=', value: 3 },
       ],
@@ -4458,8 +4470,9 @@ const ENDINGS = [
     // 直接写 <= 会在"还没开始查"时反而不成立
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
-        { not: { path: 'flags.case_stage', op: '>=', value: 3 } },
+        { path: 'flags.gave_up', op: '==', value: true },
       ],
     },
   },
@@ -4469,7 +4482,9 @@ const ENDINGS = [
     priority: 5,
     tier: 'B',
     note: '雨停了。事情没有解决，但也没有更坏。',
-    cond: { all: [ afterTurns(MIN_TURNS), { path: 'flags.declined', op: '==', value: true } ] },
+    cond: { all: [
+        atDay(END_MIN_DAY),
+ afterTurns(MIN_TURNS), { path: 'flags.declined', op: '==', value: true } ] },
   },
   /* 关系线结局 —— 同样要带轮次前提，否则开局就成立 */
   {
@@ -4479,6 +4494,7 @@ const ENDINGS = [
     tier: 'A',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '情感依赖' },
         { path: 'flags.case_stage', op: '>=', value: 4 },
@@ -4492,6 +4508,7 @@ const ENDINGS = [
     tier: 'A',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_kin', op: '==', value: '独立' },
       ],
@@ -4504,6 +4521,7 @@ const ENDINGS = [
     tier: 'C',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '决裂' },
       ],
@@ -4523,6 +4541,7 @@ const ENDINGS = [
     note: '她说留下来，是因为她想留下来 —— 不是因为她没地方去。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '伴侣-共享' },
         { path: 'flags.case_stage', op: '>=', value: 4 },
@@ -4537,6 +4556,7 @@ const ENDINGS = [
     note: '她把大学的地址写给你的时候，用的是「我们」这个词。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_kin', op: '==', value: '伴侣-共享' },
         { path: 'flags.kin_enrolled', op: '==', value: true },
@@ -4551,6 +4571,7 @@ const ENDINGS = [
     note: '最好的答案是那个没有给的答案。她自己去念书了。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_kin', op: '==', value: '独立' },
         { not: { path: 'flags.first_time_kin', op: '==', value: true } },
@@ -4565,6 +4586,7 @@ const ENDINGS = [
     note: '三个人在同一张桌子上吃饭，谁也没有先低头。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '伴侣-共享' },
         { path: 'flags.path_kin', op: '==', value: '伴侣-共享' },
@@ -4580,6 +4602,7 @@ const ENDINGS = [
     note: '两条线最后撞在了一起 —— 撞上的时候才知道本来就不能并行。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.partner_seeker', op: '==', value: true },
         { path: 'flags.partner_kin', op: '==', value: true },
@@ -4598,6 +4621,7 @@ const ENDINGS = [
     note: '判决书下来了。那三个名字第一次被写在同一张纸上。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.dual_track', op: '==', value: true },
         { path: 'flags.divorce_filed', op: '==', value: true },
@@ -4616,6 +4640,7 @@ const ENDINGS = [
     note: '你要求把授权范围写进文件的那一天，才是真正上任的那一天。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.career_power', op: '==', value: true },
@@ -4633,6 +4658,7 @@ const ENDINGS = [
     note: '位子是坐上了，代价写在附加条款的第二页。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.career_steady', op: '==', value: true },
@@ -4649,6 +4675,7 @@ const ENDINGS = [
     note: '你把重心搬回了家里。职场的名单上没有你了。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.career_stalled', op: '==', value: true },
@@ -4665,6 +4692,7 @@ const ENDINGS = [
     note: '两边的路你同时走通了 —— 这话听着像夸奖，读起来不是。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.public_relation', op: '==', value: true },
         { path: 'flags.political_capital', op: '>=', value: 18 },
@@ -4679,6 +4707,7 @@ const ENDINGS = [
     note: '你绕过他的那一次，三年以后才回来找你。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.long_grudge', op: '==', value: true },
@@ -4698,6 +4727,7 @@ const ENDINGS = [
     note: '她要的答案你给了，包括坏的那部分。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.suwan_final_answer', op: '==', value: true },
@@ -4714,6 +4744,7 @@ const ENDINGS = [
     note: '第一排的座位一直留着，她谢幕时朝这边看了一眼。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.xunuo_attended', op: '==', value: true },
@@ -4730,6 +4761,7 @@ const ENDINGS = [
     note: '界线划在哪一层，是这整条线唯一的题目。',
     cond: {
       all: [
+        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.shenzhiyi_clear', op: '==', value: true },
@@ -5301,16 +5333,91 @@ export const RAINNIGHT_MODE = {
   },
 
   world: {
+    /* 开场：按《雨与夜-V4.1》§11.3 / 第四部分 P2 示例的版式排布，
+       改用引擎既有的声明式标记（见 src/card.js），由前端渲染成面板 ——
+       不引 LaTeX、不写解析器。内容语义与原开场一致，只是补上了版式要求的
+       局面/角色卡/账本/线索四块。 */
     opening:
-      '雨从傍晚下到现在，没停过。\n'
+      '[当前局面]\n'
+      + '2025-09-26 深夜 · 你的住处 · 雨夜投奔\n'
+      + '雨从傍晚下到现在，没停过。门被敲响了。\n'
+      + '[/当前局面]\n'
+      + '\n'
+      + '雨从傍晚下到现在，没停过。\n'
       + '你在自己的住处，本来已经准备睡了 —— 门被敲响了。\n'
-      + '敲得很轻，轻到你怀疑是不是听错了；隔了几秒，又敲了三下。',
+      + '敲得很轻，轻到你怀疑是不是听错了；隔了几秒，又敲了三下。\n'
+      + '你走到门边，从猫眼里看出去：两张湿透的脸。\n'
+      + '\n'
+      + '[林晚晴｜36岁 · 当前状态]\n'
+      + '情绪 = 焦虑、无奈、强撑体面\n'
+      + '公开关系 = 家庭求助\n'
+      + '路线状态 = 未开启\n'
+      + '当轮意愿与边界 = 未公开表达\n'
+      + '身体档案 = 168cm · 58kg · 成熟丰润\n'
+      + '当前穿着 = 深色风衣湿透，浅色针织衫，长裤湿贴\n'
+      + '身体状态 = 全身湿冷、肌肉发紧、呼吸急促\n'
+      + '数值 = 信任35 · 压力88 · 疲惫82 · 自尊90\n'
+      + '隐藏打算 = 以特殊条件换取长期住所\n'
+      + '[/林晚晴｜36岁 · 当前状态]\n'
+      + '\n'
+      + '[内心想法]\n'
+      + '如果被赶走，只有拿出最后筹码。\n'
+      + '[/内心想法]\n'
+      + '\n'
+      + '[周若宁｜18岁 · 当前状态]\n'
+      + '情绪 = 紧张、嘴硬、不安\n'
+      + '公开关系 = 家庭依赖\n'
+      + '路线状态 = 未开启\n'
+      + '当轮意愿与边界 = 未公开表达\n'
+      + '身体档案 = 163cm · 50kg · 纤细匀称\n'
+      + '当前穿着 = 薄卫衣湿透，牛仔裤湿贴\n'
+      + '身体状态 = 手脚微凉、轻微发抖、强撑站直\n'
+      + '数值 = 安全感30 · 信任45 · 未来焦虑72 · 对父亲愤怒70\n'
+      + '[/周若宁｜18岁 · 当前状态]\n'
+      + '\n'
+      + '[内心想法]\n'
+      + '如果金叔不帮忙，只能自己查，不想拖累妈。\n'
+      + '[/内心想法]\n'
+      + '\n'
+      + '[玩家与共同生活账本]\n'
+      + '住房 = 市中心大平层\n'
+      + '玩家经济 = 现金1000万 · 存款8000万 · 月收入1.5万\n'
+      + '本轮收支 = 无\n'
+      + '共同生活累计 = 0 天\n'
+      + '债务与调查累计 = 阶段0 · 失联\n'
+      + '可用资源 = 律师朋友 · 银行渠道 · 警方熟人 · 管家团队\n'
+      + '[/玩家与共同生活账本]\n'
+      + '\n'
+      + '[债务线索与长期事件]\n'
+      + '阶段0 · 失联：周世杰失联约两周，留「抱歉」便条，手机关机。\n'
+      + '阶段1 · 高利贷催收：非正规高利贷，红色催告单，人身威胁。\n'
+      + '阶段2 · 五百万本息：待查。\n'
+      + '[/债务线索与长期事件]',
 
     brief:
       '现代都市。深夜的雨夜，有人带着一桩难以开口的事来求助：'
       + '家里有人欠了债、失踪两周，债主开始上门。\n'
       + '接不接、怎么接、帮到哪一步 —— 每一步都要重新确认。\n'
-      + '基调：克制的都市悬疑。写实、不夸张。紧张感来自细节和留白。',
+      + '基调：克制的都市悬疑。写实、不夸张。紧张感来自细节和留白。\n'
+      + '\n'
+      /* 文档侧约定（《雨与夜-V4.1》§11.4 输出顺序、§13.2 选项构成）——
+         这些属于「模型该怎么说」的约定，**不进引擎**（不可判定），
+         所以转成提示词注入。版式用的是引擎自己的声明式标记，不是 LaTeX。 */
+      + '【输出格式（按 §11.4，顺序固定，不要增减）】\n'
+      + '1) 〔当前局面〕：一行时间地点 + 一句话局面；\n'
+      + '2) 正文；\n'
+      + '3) 每个在场角色一张状态卡；\n'
+      + '4) 玩家与共同生活账本；\n'
+      + '5) 债务线索与长期事件。\n'
+      + '用声明式标记书写，**不要写 LaTeX**（\\[ \\fcolorbox 之类一律不认）：\n'
+      + '[当前局面] ／ 2025-09-27 清晨 · 大平层厨房 · 雨停 ／ 一句话局面 ／ [/当前局面]\n'
+      + '[林晚晴｜36岁 · 当前状态] ／ 情绪 = … ／ 公开关系 = … ／ 路线状态 = … ／ '
+      + '当轮意愿与边界 = … ／ 身体档案 = … ／ 当前穿着 = … ／ 身体状态 = … ／ '
+      + '数值 = 信任35 · 压力88 ／ 隐藏打算 = … ／ [/林晚晴｜36岁 · 当前状态]\n'
+      + '[内心想法] ／ 一句话 ／ [/内心想法]\n'
+      + '[玩家与共同生活账本] ／ 键 = 值 … ／ [/玩家与共同生活账本]\n'
+      + '[债务线索与长期事件] ／ 一行一条线索 ／ [/债务线索与长期事件]\n'
+      + '标记名必须逐字用上面的写法（含角色名与年龄）；数值行写成 `键 = 当前 / 上限` 才会画成进度条。',
 
     placeLabels: PLACES,
     clueLabels: CLUES,

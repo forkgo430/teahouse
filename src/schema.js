@@ -490,10 +490,34 @@ export function assertEventSet(events) {
  * @param {string} def.name
  * @param {Array<{key: string, label?: string, min?: number, max?: number, init?: number}>} [def.stats]
  */
+/**
+ * 角色卡上的**描写字段**（2026-09-19）。
+ *
+ * 设定文档 §11.3 / P2 示例的角色卡要这些栏位。它们**不进条件判定**
+ * （不可判定），但**要进 state**：
+ *   - 进 state，内容层就能用 effects 写（`actors.seeker.emotion = 焦虑、无奈`），
+ *     卡片才会跟着剧情变；
+ *   - 如果只放在静态文案里，数值改了卡片不动，就出现「正文说她在哭、卡上还写着平静」
+ *     那种自相矛盾 —— 引擎最不该出的错。
+ */
+export const DISPLAY_FIELDS = Object.freeze([
+  'emotion',          // 情绪
+  'publicRelation',   // 公开关系
+  'profile',          // 身体档案
+  'wearing',          // 当前穿着
+  'bodyState',        // 身体状态
+  'hiddenIntent',     // 隐藏打算
+]);
+
 export function validateActorDef(def, path, issues) {
   if (!isPlainObject(def)) {
     issues.push(issue(path, '角色定义必须是对象'));
     return;
+  }
+  for (const f of DISPLAY_FIELDS) {
+    if (def[f] !== undefined && typeof def[f] !== 'string') {
+      issues.push(issue(`${path}.${f}`, '角色卡描写字段必须是字符串'));
+    }
   }
   if (!isNonEmptyString(def.id)) {
     issues.push(issue(`${path}.id`, '角色必须有 id'));
@@ -561,6 +585,11 @@ export function createInitialState(def = {}) {
       adult: a.adult !== false,
       stats,
       bounds,
+      // 年龄（卡标题要 `林晚晴｜36岁 · 当前状态`）。非数字一律 null。
+      age: Number.isInteger(a.age) ? a.age : null,
+      // 角色卡描写字段：一律给空串，卡片渲染时按空值处理，
+      // 免得 UI 到处判 undefined。
+      ...Object.fromEntries(DISPLAY_FIELDS.map(f => [f, typeof a[f] === 'string' ? a[f] : ''])),
     };
   }
 

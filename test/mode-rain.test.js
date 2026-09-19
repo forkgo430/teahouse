@@ -16,6 +16,7 @@ import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch, pickEvent
 import { createDemoWorld } from '../data/demo.js';
 import { createInitialState, validateEventSet, validateCondition } from '../src/schema.js';
 import { parseCardMarkup } from '../src/card.js';
+import { scenePanelMarkup } from '../src/scenePanel.js';
 import { applyEffects, createStore } from '../src/state.js';
 import { evaluate } from '../src/condition.js';
 import {
@@ -78,27 +79,41 @@ test('事件集能过一次 schema 校验（非法数据不许静默通过）', 
  * 而不是退化成一大段纯文本 —— 后者正是改造前"页面只剩纯文本"的样子。
  * ---------------------------------------------------------------- */
 
-test('开场按 P2 版式排布，且每张卡都能被识别成组件', () => {
+test('开场只承担 P2 版式的头：〔当前局面〕+ 正文', () => {
   const segs = parseCardMarkup(RAINNIGHT_MODE.world.opening);
   const blocks = segs.filter(s => s.type === 'block');
 
-  assert.deepEqual(
-    blocks.map(s => s.kind),
-    ['scene', 'stats', 'thought', 'stats', 'thought', 'stats', 'list'],
-    '开场块序列不符：局面 / 林晚晴卡 / 内心 / 周若宁卡 / 内心 / 账本 / 线索',
-  );
-
-  const titles = blocks.map(s => s.title);
-  for (const t of ['当前局面', '林晚晴｜36岁 · 当前状态', '周若宁｜18岁 · 当前状态',
-    '玩家与共同生活账本', '债务线索与长期事件']) {
-    assert.ok(titles.includes(t), `标题未被识别成区块：${t}`);
-  }
-
-  // 正文段不能被吞掉
+  assert.deepEqual(blocks.map(s => s.kind), ['scene'], '开场应只有一个局面块');
   assert.ok(
     segs.some(s => s.type === 'text' && s.text.includes('敲得很轻')),
     '开场正文丢了',
   );
+});
+
+test('角色卡/账本/线索由 state 现算，而不是写死文案', () => {
+  const s = initialState();
+  const w = world();
+  const blocks = parseCardMarkup(scenePanelMarkup(s, w, { actorIds: ['seeker', 'kin'] }))
+    .filter(x => x.type === 'block');
+
+  // 局面 / 两张角色卡 / 账本 / 线索
+  assert.deepEqual(blocks.map(b => b.kind), ['scene', 'stats', 'stats', 'stats', 'list']);
+
+  const seekerCard = blocks[1];
+  assert.ok(seekerCard.title.includes('林晚晴'), `第一张卡应是林晚晴，实际 ${seekerCard.title}`);
+  for (const key of ['情绪', '公开关系', '路线状态', '当轮意愿与边界', '身体档案',
+    '当前穿着', '身体状态', '数值', '隐藏打算']) {
+    assert.ok(seekerCard.items.some(i => i.key === key), `角色卡缺「${key}」`);
+  }
+
+  // 卡片必须跟着 state 动：这才是「现算」而不是「写死」
+  const s2 = applyEffects(s, [
+    { path: 'actors.seeker.emotion', op: 'set', value: '撑不住了' },
+    { path: 'actors.seeker.stats.trust', op: 'sub', value: 10 },
+  ]).state;
+  const md2 = scenePanelMarkup(s2, w, { actorIds: ['seeker'] });
+  assert.ok(md2.includes('情绪 = 撑不住了'), '角色卡没反映情绪变更');
+  assert.ok(md2.includes('信任25 / 100'), '角色卡没反映数值变更');
 });
 
 /* ---------------------------------------------------------------- *

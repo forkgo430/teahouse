@@ -42,6 +42,7 @@ const MODULES = [
   'src/regex.js',
   'src/freechat.js',
   'src/card.js',
+  'src/scenePanel.js',
   'src/director.js',
   'src/swipe.js',
   'src/boy.js',

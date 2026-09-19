@@ -46,6 +46,7 @@ import {
   makeStatusCard, makeTruthMark, isTruthMarked, sampleCardMarkup,
 } from '../src/card.js';
 import { applyDisplayOutbound, normalizeRule, SHIPPED_RULES } from '../src/regex.js';
+import { scenePanelMarkup } from '../src/scenePanel.js';
 import { createBoy, normalizeBoyConfig, DEFAULT_BOY, WRITABLE, BOY_EVENTS } from '../src/boy.js';
 import { buildBoyDocument } from '../src/boyFrame.js';
 
@@ -1292,6 +1293,24 @@ function startMain(root, opts = {}) {
       attachSpot(node);
       stream.appendChild(node);
     });
+
+    /* 雨夜模式：末尾挂一张「现在什么状态」的面板。
+       它由 state **现算**（src/scenePanel.js），不是写死的文案 ——
+       剧情改了数值/情绪，卡片立刻跟着变；否则会出现
+       「正文说她在哭、卡上还写着平静」那种自相矛盾。
+       只出有 `profile` 的角色（雨夜里就是林晚晴与周若宁），
+       避免把「你」「催收方」这种没有身体档案的角色也画成卡。 */
+    if (world.rainLevel > 0) stream.appendChild(scenePanelNode());
+  }
+
+  function scenePanelNode() {
+    const s = store.getState();
+    const actorIds = Object.values(s.actors ?? {})
+      .filter(a => String(a.profile ?? '').trim() !== '')
+      .map(a => a.id);
+    const box = el('div', 'ne-msg ne-msg-narrator ne-scene-panel');
+    box.appendChild(textBox(scenePanelMarkup(s, world, { actorIds })));
+    return box;
   }
 
   function appendSystem(text, tone) {

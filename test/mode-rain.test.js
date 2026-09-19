@@ -158,6 +158,35 @@ test('§13.3 规则3：三连「小」之后优先挑带大分支的事件', () 
   assert.equal(pickEvent(stalled, w).id, 'big', '三连「小」之后应改选带大分支的 big');
 });
 
+test('§19.1.3：结局报告能解释「凭什么达成」与「还差什么」', () => {
+  const w = world();
+  let state = initialState();
+  let report = null;
+  for (let i = 0; i < 200 && !report; i++) {
+    const opened = nextTurn(state, w);
+    state = opened.state;
+    if (!opened.event) continue;
+    const usable = opened.options.filter(o => o.available);
+    if (usable.length === 0) break;
+    const r = applyTurn(state, opened.event, usable[0].key, w);
+    state = r.state;
+    if (r.report.terminal) report = r.report;
+  }
+
+  assert.ok(report, '200 轮内没走到结局');
+  assert.ok(report.ending.trace.reached.length > 0, '结局没给达成条件回放');
+  assert.ok(report.ending.trace.missed.length === 0, '已成立的结局不应有未达成项');
+  // 未达成项提示：指向别的结局
+  assert.ok(Array.isArray(report.ending.missed));
+  for (const m of report.ending.missed) {
+    assert.ok(m.id && m.missing, `未达成项提示字段不全：${JSON.stringify(m)}`);
+  }
+  // note 不能被整条 JSON 撑爆
+  for (const it of report.ending.trace.reached) {
+    assert.ok(it.note.length <= 60, `note 过长：${it.note.slice(0, 80)}`);
+  }
+});
+
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {
   const segs = parseCardMarkup('[林晚晴｜36岁 · 当前状态]\n情绪 = 焦虑\n[/林晚晴｜36岁 · 当前状态]');
   assert.equal(segs.length, 1);

@@ -410,6 +410,43 @@ function firstFailure(cond, state) {
   return { text: shortReason(bad), detail: `${bad.path} — ${bad.note}` };
 }
 
+/**
+ * §19.1.3「结局输出时附达成条件回放与未达成项提示」。
+ *
+ * 复用 condition.js 的 explain()，**不另写一套条件遍历** ——
+ * 两套遍历必然在某次改条件结构时漂移，然后「回放」和「判定」说的不是一回事。
+ *
+ * @returns {{ reached: Array<{path:string,note:string}>, missed: Array<{path:string,note:string}> }}
+ */
+export function endingTrace(ending, state) {
+  const { steps } = explain(ending?.cond ?? null, state);
+  const reached = [];
+  const missed = [];
+  for (const s of steps) {
+    /* `history[5] exists` 这类条件的 note 会把整条历史记录 stringify 出来，
+       直接给玩家看是一坨 JSON。截断，够表达意思就行。 */
+    const raw = String(s.note ?? '');
+    const item = { path: s.path ?? '', note: raw.length > 48 ? `${raw.slice(0, 48)}…` : raw };
+    (s.ok === false ? missed : reached).push(item);
+  }
+  return { reached, missed };
+}
+
+/** 其他结局离达成还差哪一项（只给前 N 个，按 priority 从高到低）。 */
+export function missedEndings(world, state, excludeId, limit = 3) {
+  const out = [];
+  for (const e of world?.endings ?? []) {
+    if (e.id === excludeId) continue;
+    const { missed } = endingTrace(e, state);
+    if (missed.length === 0) continue;      // 它其实也达成了，不算「差一项」
+    out.push({ id: e.id, title: e.title, missing: missed[0].note || missed[0].path });
+  }
+  return out
+    .sort((a, b) => (world.endings.find(x => x.id === b.id)?.priority ?? 0)
+      - (world.endings.find(x => x.id === a.id)?.priority ?? 0))
+    .slice(0, limit);
+}
+
 /* ------------------------------------------------------------------ *
  * ⑦ 校验边界
  * ------------------------------------------------------------------ */
@@ -635,7 +672,15 @@ export function applyTurn(state, event, input, world) {
       firstMet: (event.firstMet ?? []).filter(id => state.actors?.[id]?.met !== true),
       changes: [...parts, ...post],
       achievements: hitAchievements.map(a => ({ id: a.id, title: a.title })),
-      ending: hitEndings[0] ? { id: hitEndings[0].id, title: hitEndings[0].title } : null,
+      // §19.1.3：结局要能解释「凭什么达成」与「还差什么」
+      ending: hitEndings[0] ? {
+        id: hitEndings[0].id,
+        title: hitEndings[0].title,
+        note: hitEndings[0].note ?? '',
+        tier: hitEndings[0].tier ?? null,
+        trace: endingTrace(hitEndings[0], cur),
+        missed: missedEndings(world, cur, hitEndings[0].id),
+      } : null,
       terminal: hitEndings.length > 0,
     },
   };

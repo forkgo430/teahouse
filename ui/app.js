@@ -18,7 +18,7 @@ import { createDemoWorld, createDemoState, CLUES, PLACES } from '../data/demo.js
 import { createInitialState } from '../src/schema.js';
 import { createWorld } from '../src/engine.js';
 import { RAINNIGHT_MODE, createRainWorld, rainInitialState } from '../data/mode-rain.js';
-import { nextTurn, applyTurn, buildView, TurnRejected } from '../src/engine.js';
+import { nextTurn, applyTurn, buildView, TurnRejected, endingTrace, missedEndings } from '../src/engine.js';
 import { createStore, applyEffects, hashState } from '../src/state.js';
 import { exportStore, importToStore, SaveError } from '../src/save.js';
 import { createClient, readConfig, writeConfig, clearConfig } from '../src/llm.js';
@@ -2872,6 +2872,32 @@ function startMain(root, opts = {}) {
       box.appendChild(el('h2', 'ne-ending-title', def?.title ?? id));
       if (def?.note) box.appendChild(el('p', 'ne-ending-note', def.note));
       box.appendChild(el('p', 'ne-ending-stat', `共 ${state.history.length} 轮 · 线索 ${state.clues.length} 条`));
+
+      /* §19.1.3：结局要附「达成条件回放」与「未达成项提示」——
+         否则玩家只看到一句判词，不知道自己凭什么走到这里、又差在哪。
+         复用引擎的 endingTrace / missedEndings（和判定同一套遍历）。 */
+      if (def) {
+        const { reached } = endingTrace(def, state);
+        if (reached.length > 0) {
+          const back = el('div', 'ne-ending-trace');
+          back.appendChild(el('div', 'ne-ending-trace-head', '达成条件回顾'));
+          const ul = el('div', 'ne-ending-trace-list');
+          for (const it of reached) ul.appendChild(el('div', 'ne-ending-trace-item', it.note || it.path));
+          back.appendChild(ul);
+          box.appendChild(back);
+        }
+        const missed = missedEndings(world, state, def.id, 3);
+        if (missed.length > 0) {
+          const miss = el('div', 'ne-ending-trace ne-ending-missed');
+          miss.appendChild(el('div', 'ne-ending-trace-head', '另外几条路，差在哪里'));
+          const ul = el('div', 'ne-ending-trace-list');
+          for (const m of missed) {
+            ul.appendChild(el('div', 'ne-ending-trace-item', `${m.title} —— ${m.missing}`));
+          }
+          miss.appendChild(ul);
+          box.appendChild(miss);
+        }
+      }
       stream.appendChild(box);
     }
 

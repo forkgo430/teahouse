@@ -1159,6 +1159,12 @@ function startMain(root, opts = {}) {
     const shown = applyDisplayOutbound(String(text ?? ''), regexRules).text;
     const src = shown;
 
+    /* 空正文：雨夜里有些分支**故意不写正文**，留给模型现场创作。
+       零模型时不能给玩家一个空气泡 —— 那看起来像坏了，得说清楚为什么是空的。 */
+    if (src.trim() === '') {
+      return el('p', `${cls} ne-msg-empty`, '（这一段的正文留给模型书写 —— 接入 API 后由它现场生成）');
+    }
+
     if (!hasCardMarkup(src)) {
       /* 没有区块标记，但**行内标记要在** —— 否则 [条:信任|72|100] ✓
          和 [签:危险] ✓ 会原样显示成一串方括号。

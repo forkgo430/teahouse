@@ -4023,3 +4023,12 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
   font-size: 12px;
   color: var(--ink-1);
 }
+
+/* 空正文提示（雨夜：有些分支的正文留给模型现场写）——
+   压成一行的浅色小字，别让它看起来像一条正常正文。 */
+.ne-msg-text.ne-msg-empty {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ink-3);
+  opacity: 0.85;
+}

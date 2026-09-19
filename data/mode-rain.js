@@ -249,6 +249,18 @@ const EVENTS = [
           { path: 'actors.self.stats.composure', op: 'add', value: 6 },
         ],
       },
+      {
+        key: "D",
+        label: "让她们先在屋檐下等着，你回屋想一想",
+        keywords: ["等一会儿", "想想", "待会儿"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 2 },
+          { path: "actors.kin.stats.safety", op: "add", value: 4 },
+          { path: "flags.let_them_wait", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -299,6 +311,17 @@ const EVENTS = [
           { path: 'flags.case_stage', op: 'set', value: 1 },
           { path: 'actors.kin.stats.trust', op: 'sub', value: 5 },
           { path: 'flags.doubted', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先问债主长什么样，记下特征",
+        keywords: ["债主", "长相", "记下来"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "D1" },
+          { path: "flags.asked_collector", op: "set", value: true },
         ],
       },
     ],
@@ -352,6 +375,18 @@ const EVENTS = [
           { path: 'actors.seeker.stats.trust', op: 'sub', value: 8 },
         ],
       },
+      {
+        key: "D",
+        label: "让若宁先去睡，你和她母亲单独说",
+        keywords: ["让孩子睡", "单独说", "她母亲"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 6 },
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.talked_alone", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -403,6 +438,17 @@ const EVENTS = [
           { path: 'actors.kin.stats.anxiety', op: 'add', value: 8 },
         ],
       },
+      {
+        key: "D",
+        label: "倒杯热水放她门口，不敲门",
+        keywords: ["热水", "放门口", "不打扰"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 5 },
+          { path: "flags.water_by_door", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -448,6 +494,17 @@ const EVENTS = [
         effects: [
           { path: 'flags.butler_none', op: 'set', value: true },
           { path: 'actors.collector.stats.alertness', op: 'add', value: 20 },
+        ],
+      },
+      {
+        key: "D",
+        label: "先只查那辆车，安保往后放",
+        keywords: ["只查车", "先查", "安保再说"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.case_stage", op: "add", value: 1 },
+          { path: "ledger.expense", op: "add", value: 20000 },
         ],
       },
     ],
@@ -498,6 +555,17 @@ const EVENTS = [
           { path: 'actors.seeker.stats.trust', op: 'add', value: 10 },
           { path: 'actors.kin.stats.safety', op: 'add', value: 8 },
           { path: 'flags.asked_her', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先办校服，别的慢慢来",
+        keywords: ["先办校服", "校服", "往后放"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 6 },
+          { path: "flags.uniform_first", op: "set", value: true },
         ],
       },
     ],
@@ -554,6 +622,17 @@ const EVENTS = [
           { path: 'actors.self.stats.weary', op: 'add', value: 15 },
         ],
       },
+      {
+        key: "D",
+        label: "先不惊动，让人只把车牌记下来",
+        keywords: ["记车牌", "不惊动", "先看着"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "S2" },
+          { path: "flags.plate_noted", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -605,6 +684,17 @@ const EVENTS = [
           { path: 'ledger.expense', op: 'add', value: 30000 },
         ],
       },
+      {
+        key: "D",
+        label: "先不请律师，自己把材料理一遍",
+        keywords: ["自己理", "先不请", "我看看"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.case_stage", op: "add", value: 1 },
+          { path: "flags.self_sorted", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -653,6 +743,18 @@ const EVENTS = [
           { path: 'flags.case_stage', op: 'add', value: 1 },
           { path: 'flags.formal_request', op: 'set', value: true },
           { path: 'ledger.expense', op: 'add', value: 40000 },
+        ],
+      },
+      {
+        key: "D",
+        label: "先只盯那家空壳公司",
+        keywords: ["空壳", "只查那家", "先盯"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "S3" },
+          { path: "flags.case_stage", op: "add", value: 1 },
+          { path: "flags.shell_only", op: "set", value: true },
         ],
       },
     ],
@@ -815,6 +917,17 @@ const EVENTS = [
         effects: [
           { path: 'actors.collector.stats.patience', op: 'sub', value: 15 },
           { path: 'flags.delayed_track', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "把这条线交给管家去跑",
+        keywords: ["让管家查", "交出去", "管家"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "S5" },
+          { path: "flags.staffed_track", op: "set", value: true },
         ],
       },
     ],
@@ -990,6 +1103,17 @@ const EVENTS = [
           { path: 'flags.hid_from_collector', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先记下他们说的每一句",
+        keywords: ["记下来", "他们说", "笔录"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "D1" },
+          { path: "flags.took_notes", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -1039,6 +1163,17 @@ const EVENTS = [
           { path: 'actors.collector.stats.patience', op: 'sub', value: 20 },
         ],
       },
+      {
+        key: "D",
+        label: "先拍下车，再决定拦不拦",
+        keywords: ["拍下来", "拍照", "先拍"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "S7" },
+          { path: "flags.photographed", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -1084,6 +1219,18 @@ const EVENTS = [
         effects: [
           { path: 'actors.collector.stats.patience', op: 'sub', value: 20 },
           { path: 'flags.held_back_legal', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先只做账户保全，暂不发函",
+        keywords: ["先保全", "不发函", "冻账"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.case_stage", op: "add", value: 1 },
+          { path: "ledger.expense", op: "add", value: 50000 },
+          { path: "flags.freeze_only", op: "set", value: true },
         ],
       },
     ],
@@ -1135,6 +1282,17 @@ const EVENTS = [
           { path: 'actors.kin.stats.anxiety', op: 'add', value: 10 },
         ],
       },
+      {
+        key: "D",
+        label: "陪她走到门口，不跟着进去",
+        keywords: ["陪到门口", "不进去", "在外面等"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.dignity", op: "add", value: 4 },
+          { path: "flags.to_door_only", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -1179,6 +1337,17 @@ const EVENTS = [
         effects: [
           { path: 'actors.seeker.stats.dignity', op: 'sub', value: 10 },
           { path: 'actors.seeker.stats.trust', op: 'sub', value: 8 },
+        ],
+      },
+      {
+        key: "D",
+        label: "先不问结果，等她开口",
+        keywords: ["不问", "等她", "让她说"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 6 },
+          { path: "flags.waited_for_her", op: "set", value: true },
         ],
       },
     ],
@@ -1230,6 +1399,17 @@ const EVENTS = [
           { path: 'flags.kin_alone', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "给学校打个电话，确认她到没到",
+        keywords: ["打电话", "确认", "学校"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 4 },
+          { path: "flags.called_school", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -1278,6 +1458,17 @@ const EVENTS = [
           { path: 'flags.pressed_insider', op: 'set', value: true },
           { path: 'actors.seeker.stats.trust', op: 'sub', value: 10 },
           { path: 'actors.collector.stats.alertness', op: 'add', value: 20 },
+        ],
+      },
+      {
+        key: "D",
+        label: "先听她说完，不表态",
+        keywords: ["听她说完", "先听", "不表态"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "D5" },
+          { path: "flags.listened_first", op: "set", value: true },
         ],
       },
     ],
@@ -1390,6 +1581,17 @@ const EVENTS = [
           { path: 'actors.seeker.stats.trust', op: 'sub', value: 10 },
           { path: 'actors.seeker.stats.dignity', op: 'sub', value: 8 },
           { path: 'flags.delayed_filing', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先陪她把材料再对一遍",
+        keywords: ["对材料", "再看一遍", "陪她"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 6 },
+          { path: "actors.seeker.stats.dignity", op: "add", value: 4 },
         ],
       },
     ],
@@ -1557,6 +1759,17 @@ const EVENTS = [
           { path: 'actors.kin.stats.anxiety', op: 'add', value: 8 },
         ],
       },
+      {
+        key: "D",
+        label: "先租下隔壁那间，让她们慢慢想",
+        keywords: ["隔壁", "租下来", "慢慢想"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "ledger.expense", op: "add", value: 30000 },
+          { path: "flags.buffer_room", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -1595,6 +1808,27 @@ const EVENTS = [
           { path: 'flags.boundary_deferred', op: 'set', value: true },
         ],
       },
+      {
+        key: "C",
+        label: "只说条款，不解释",
+        keywords: ["只说条款", "不解释", "念一遍"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.terms_only", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先问她想听到哪一步",
+        keywords: ["你想听哪一步", "先说哪段", "问一句"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.asked_scope", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -1629,6 +1863,27 @@ const EVENTS = [
         effects: [
           { path: 'actors.seeker.stats.trust', op: 'add', value: 6 },
           { path: 'flags.held_back', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "C",
+        label: "按条款来，一句不多说",
+        keywords: ["照条款", "不多说", "按说好的"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.strict_terms", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先问她今天方不方便",
+        keywords: ["今天方便吗", "先问", "累不累"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.asked_mood", op: "set", value: true },
         ],
       },
     ],
@@ -1673,6 +1928,16 @@ const EVENTS = [
           { path: 'actors.self.stats.composure', op: 'add', value: 8 },
         ],
       },
+      {
+        key: "D",
+        label: "先放一星期再决定",
+        keywords: ["先放着", "过几天", "再说"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.held_letter", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -1713,6 +1978,27 @@ const EVENTS = [
           { path: 'actors.seeker.stats.pressure', op: 'add', value: 3 },
         ],
       },
+      {
+        key: "C",
+        label: "先只给她门口的备用钥匙",
+        keywords: ["备用钥匙", "门口那把", "先给一把"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.spare_key_only", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "再等等，钥匙先不着急",
+        keywords: ["再等等", "先不给", "不急"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.key_later", op: "set", value: true },
+        ],
+      },
     ],
   },
   {
@@ -1748,6 +2034,28 @@ const EVENTS = [
         effects: [
           { path: 'actors.seeker.stats.pressure', op: 'add', value: 6 },
           { path: 'actors.self.stats.pressure', op: 'add', value: 8 },
+        ],
+      },
+      {
+        key: "C",
+        label: "只摊她那一份，不动别的",
+        keywords: ["只摊她那份", "分开", "一部分"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "S3" },
+          { path: "flags.one_side_only", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先把账本收起来，改天再摊",
+        keywords: ["收起来", "改天", "先不摊"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.books_later", op: "set", value: true },
         ],
       },
     ],
@@ -1787,6 +2095,28 @@ const EVENTS = [
           { path: 'flags.held_back', op: 'set', value: true },
         ],
       },
+      {
+        key: "C",
+        label: "接住，但说清楚只能到这一步",
+        keywords: ["只能到这一步", "说清楚", "接住"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 6 },
+          { path: "flags.line_stated", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先让她把话说完",
+        keywords: ["先说完", "听着", "别打断"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.heard_to_end", op: "set", value: true },
+        ],
+      },
     ],
   },
   {
@@ -1823,6 +2153,28 @@ const EVENTS = [
           { path: 'actors.seeker.stats.trust', op: 'add', value: -20 },
         ],
       },
+      {
+        key: "C",
+        label: "问一句怎么了，不追问",
+        keywords: ["怎么了", "问一句", "不追问"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.asked_once", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "把灯留着，不说话",
+        keywords: ["留灯", "不说话", "陪着"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.pressure", op: "sub", value: 6 },
+          { path: "flags.light_kept", op: "set", value: true },
+        ],
+      },
     ],
   },
   {
@@ -1854,6 +2206,28 @@ const EVENTS = [
           + '把书包抱在腿上坐了一晚上。',
         effects: [
           { path: 'actors.kin.stats.safety', op: 'add', value: -5 },
+        ],
+      },
+      {
+        key: "C",
+        label: "给她一把自己的椅子",
+        keywords: ["自己的椅子", "固定位置", "留个位"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.dignity", op: "add", value: 6 },
+          { path: "flags.own_chair", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先问问她想在哪儿",
+        keywords: ["你想坐哪儿", "问她", "自己挑"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.asked_spot", op: "set", value: true },
         ],
       },
     ],
@@ -1894,6 +2268,28 @@ const EVENTS = [
           { path: 'actors.kin.stats.anger', op: 'add', value: 6 },
         ],
       },
+      {
+        key: "C",
+        label: "答应，但先说要守的规矩",
+        keywords: ["带你去", "有规矩", "先说好"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.trust", op: "add", value: 6 },
+          { path: "flags.rules_first", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先哄住，回头再说",
+        keywords: ["下次", "回头说", "先这样"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.anxiety", op: "add", value: 5 },
+          { path: "flags.put_off", op: "set", value: true },
+        ],
+      },
     ],
   },
   {
@@ -1931,6 +2327,28 @@ const EVENTS = [
           { path: 'actors.kin.stats.safety', op: 'add', value: 4 },
         ],
       },
+      {
+        key: "C",
+        label: "答应，但要她随时报平安",
+        keywords: ["你去", "报个平安", "随时说一声"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.trust", op: "add", value: 6 },
+          { path: "flags.keep_in_touch", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先陪她走到路口",
+        keywords: ["陪你到路口", "送到路口", "一段"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 6 },
+          { path: "flags.to_corner", op: "set", value: true },
+        ],
+      },
     ],
   },
   {
@@ -1964,6 +2382,28 @@ const EVENTS = [
         text: '你说再等等。她点头，把东西一件件收回去，动作和摊开时一样慢。',
         effects: [
           { path: 'actors.seeker.stats.pressure', op: 'add', value: 5 },
+        ],
+      },
+      {
+        key: "C",
+        label: "接住，并且回一句实话",
+        keywords: ["我也说一句", "实话", "接住"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 8 },
+          { path: "flags.answered_true", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先不接，等她自己收回去",
+        keywords: ["不接", "等她说", "先这样"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.pressure", op: "add", value: 6 },
+          { path: "flags.left_hanging", op: "set", value: true },
         ],
       },
     ],
@@ -2000,6 +2440,28 @@ const EVENTS = [
           + '笔尖顿了一下。',
         effects: [
           { path: 'actors.kin.stats.anxiety', op: 'add', value: 4 },
+        ],
+      },
+      {
+        key: "C",
+        label: "信她，但不逼她再讲一遍",
+        keywords: ["信你", "不用再讲", "知道了"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 8 },
+          { path: "flags.believed_quietly", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先带她离开那个地方",
+        keywords: ["先走", "离开这儿", "换个地方"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 6 },
+          { path: "flags.led_away", op: "set", value: true },
         ],
       },
     ],
@@ -2235,6 +2697,17 @@ const EVENTS = [
           { path: 'flags.held_line', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "开着门，坐在地板上陪她",
+        keywords: ["开着门", "坐地板", "陪着"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 6 },
+          { path: "flags.door_open_sat", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -2286,6 +2759,17 @@ const EVENTS = [
         effects: [
           { path: 'actors.kin.stats.anxiety', op: 'add', value: 6 },
           { path: 'flags.declined_once', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先抱着，什么都不做",
+        keywords: ["先抱着", "什么都不做", "就这样"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.trust", op: "add", value: 6 },
+          { path: "flags.held_only", op: "set", value: true },
         ],
       },
     ],
@@ -2340,6 +2824,17 @@ const EVENTS = [
           { path: 'actors.seeker.stats.trust', op: 'sub', value: 10 },
           { path: 'actors.seeker.stats.dignity', op: 'sub', value: 12 },
           { path: 'flags.hard_no', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "留她坐一会儿，不往前",
+        keywords: ["坐一会儿", "不往前", "聊天"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 6 },
+          { path: "flags.sat_with_her", op: "set", value: true },
         ],
       },
     ],
@@ -2512,6 +3007,17 @@ const EVENTS = [
           { path: 'actors.kin.stats.trust', op: 'sub', value: 6 },
           { path: 'actors.kin.stats.safety', op: 'sub', value: 5 },
           { path: 'flags.ignored_her', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "把药和粥都备好，放她够得到的地方",
+        keywords: ["备好药", "放门口", "够得到"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 5 },
+          { path: "flags.within_reach", op: "set", value: true },
         ],
       },
     ],
@@ -2882,6 +3388,16 @@ const EVENTS = [
           { path: 'ledger.expense', op: 'add', value: 30000 },
         ],
       },
+      {
+        key: "D",
+        label: "先自己把要问的列清楚",
+        keywords: ["列个单子", "先想好", "问什么"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.questions_listed", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -2925,6 +3441,16 @@ const EVENTS = [
         text: "你说再看看。对方笑着点头，那种笑你是见过的，是你早晚会签的意思。你回到酒店，把今天听到的条件重新排了一遍，发现自己确实没有更好的选择，只是不想今天就承认。你给律师打了个电话，让他把几种可能的走向都过一遍。打完电话已经半夜了，你站在窗前看外面的灯，忽然想到一个词：拖。这个词你以前最不喜欢，现在却觉得它有时候也是办法。能把事情拖到下一个局面里，本身就是一种本事，前提是下一个局面，你会比现在强一点。拖了一个月之后，对方果然先动了，条件比原来松了一些。你在电话里听出他语气里的急，知道自己赌对了一半。可你没敢松劲，因为另一半还没落地。那阵子你白天处理别的事，晚上想这件事，睡得很浅。她看见了，没说什么，只是在你半夜起来的时候，留了一盏小灯在客厅。有些等待不必有人陪，但那盏灯，你记住了。后来你把这个习惯也学到了自己身上，凡是要等的事，先给自己留一盏灯。那盏灯后来成了你们之间一个不说话的习惯，谁留，谁就还醒着。对方那次急了以后，你反而不急。你把这件事放在一边，先去办别的，等再回头看，条件已经自己松到了你能接受的位置。你没有得意，因为你知道这次是运气，下次未必。你把这一课记下来：拖可以，但要拖得有底气。底气不是嘴上说没事，是你手上真的有别的事在往前走，那样你才拖得动，也才拖得起。",
         effects: [
           { path: 'flags.zheng_paused', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先不表态，把条款带回去",
+        keywords: ["带回去", "先不签", "再看看"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.took_terms_back", op: "set", value: true },
         ],
       },
     ],
@@ -2972,6 +3498,16 @@ const EVENTS = [
           { path: 'flags.future_fallout', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先陪她坐完这一夜",
+        keywords: ["陪她坐", "这一夜", "别急着答"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.sat_through_night", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3012,6 +3548,16 @@ const EVENTS = [
         text: "你把名片留在桌上，没有拿走。有些线不开就是不开，这不是清高，是你知道自己的精力只有那么多，开了头就要负责。她后来没有再联系你，你也没有回头。过了很久你在一个场合远远看见过她一次，她正和别人谈笑，眼神扫过来，认出你，点了一下头。你也点头。两个人就再没有别的了。你把这件事记在心里的那一栏，那一栏里都是你主动放掉的东西，不多，但每一件都放得干净，放完之后你没有再回头看过，因为没有必要。那张留在桌上的名片，后来被服务生收走了。你没问过它的去向，也不需要知道。你只是从那以后更清楚一件事：不是每一个向你伸手的人都值得接，也不是每一个你不接的人都会难过。有些人的伸手本来就是试探，你接不接，对他们来说都只是数据。你把这件事想通之后，待人反而松了一些，拒绝的时候也不再需要找理由，说一句这次不了，就够了。后来你发现，拒绝这件事也有手艺。年轻时你拒绝人要么太硬，要么太软，硬了伤人，软了拖人。现在你能把话说到刚刚好，既让对方知道他没戏，也不让他觉得难堪。这个本事不是学的，是被几次教训磨出来的。你把那些教训记着，不为了记住谁，只为了下次不要再犯同样的错。那张留在桌上的名片，后来你想起来的时候，已经不太记得那个人的样子了，只记得她说话的速度很快。",
         effects: [
           { path: 'flags.jingtian_closed', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先加个联系方式，别的以后说",
+        keywords: ["加个微信", "留个联系方式", "以后说"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.kept_contact", op: "set", value: true },
         ],
       },
     ],
@@ -3056,6 +3602,16 @@ const EVENTS = [
         text: "你说不合适。她点了头，连原因都没问，说明她早就知道会是这个答案。她站起来，把椅子推回原位，说那打扰了。你送她到门口，她回头看了你一眼，说了一句其实我不是为了钱。你说我知道。她笑了一下，走了。那天晚上你想了很久，想的不是她，是自己为什么能这么干脆地说不合适。答案不复杂：你不想欠，也不想被欠。这种心思说得出口显得冷漠，可它就是真的。你想，也许这就是你这个人最硬的地方，硬得连你自己都觉得有点陌生。你后来想，干脆的拒绝反而是一种尊重，因为它不吊着人，也不给自己留后路。你把这件事记在本子上，只写了一行：她不是为了钱。这一行你记着，不是为了她，是为了提醒自己，有些人的不容易，不一定要用钱去接。那天之后你收到过她一条消息，只有四个字，说谢谢理解。你回了两个字，保重。这段关系就到这里，干净，也体面，谁都没有欠谁。她走之后你在那个房间里坐到天黑。你想起她说的那句不是为了钱，知道那多半是真的。可正因为是真的，你才更不能给，因为一旦给了，你要接的就不只是钱。有些人来找你要的是钱，有些人来找你要的是一个位置，你分得清，所以你能干脆地拒绝。你把这个分得清当作一种清醒，也当作一种代价，因为分得清的人，往往也留不住什么。",
         effects: [
           { path: 'flags.xunuo_refused', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先答应一半，剩下的看情况",
+        keywords: ["先答应一半", "看情况", "再说"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.half_promise", op: "set", value: true },
         ],
       },
     ],
@@ -3221,6 +3777,17 @@ const EVENTS = [
           { path: 'flags.proxy_meeting', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "散会后单独找老师问两句",
+        keywords: ["找老师", "单独问", "散会后"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 5 },
+          { path: "flags.asked_teacher", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3318,6 +3885,16 @@ const EVENTS = [
           { path: 'flags.shenzhiyi_cold', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先给她一份清单，让她自己看",
+        keywords: ["给份清单", "自己看", "先熟悉"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.gave_checklist", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3361,6 +3938,16 @@ const EVENTS = [
         effects: [
           { path: 'flags.edge_out', op: 'set', value: true },
           { path: 'actors.self.stats.composure', op: 'sub', value: 8 },
+        ],
+      },
+      {
+        key: "D",
+        label: "先把该问的人问一圈",
+        keywords: ["问一圈", "先打听", "问问"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.asked_around", op: "set", value: true },
         ],
       },
     ],
@@ -3468,6 +4055,17 @@ const EVENTS = [
           { path: 'actors.kin.stats.anxiety', op: 'sub', value: 4 },
         ],
       },
+      {
+        key: "D",
+        label: "只送到路口，不跟到门口",
+        keywords: ["送到路口", "不跟进去", "就到这儿"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.safety", op: "add", value: 5 },
+          { path: "flags.to_corner_only", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3513,6 +4111,17 @@ const EVENTS = [
           { path: 'flags.kin_enrolled', op: 'set', value: true },
           { path: 'ledger.expense', op: 'add', value: 2000 },
           { path: 'actors.kin.stats.trust', op: 'sub', value: 3 },
+        ],
+      },
+      {
+        key: "D",
+        label: "送她到校门口，剩下的她自己办",
+        keywords: ["送到校门口", "剩下你自己", "自己办"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.trust", op: "add", value: 5 },
+          { path: "flags.to_gate_only", op: "set", value: true },
         ],
       },
     ],
@@ -3562,6 +4171,17 @@ const EVENTS = [
           { path: 'flags.seeker_independent', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先陪她去看一眼那家店",
+        keywords: ["去看一眼", "陪她看", "那家店"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 5 },
+          { path: "flags.saw_the_shop", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3603,6 +4223,16 @@ const EVENTS = [
         text: "你笑着把问题递了回去，问她住在哪户，说自己刚搬来还不太认路。她说了楼层，就顺势岔开了，之后再也没有问过这家的事。你想，成年人的来往很多时候就是这样，你给对方一个台阶，对方也就顺着台阶下去了。那一层楼住了七八户人，后来真正打过照面的，也就那么两三家，大家客客气气，谁也不问谁家的事。你觉得这样挺好，比热络好。热络的邻居比冷淡的邻居麻烦，这是你在别处学到的。热络的邻居比冷淡的邻居麻烦，这是你在别处学到的。后来你搬过几次家，每一次都用了同样的办法：跟邻居客气，但不深交，见面点头，有事帮忙，别的不问。你发现这样住着最省心，既不孤单，也没有人来打听你的事。有一回一个新邻居特别热情，天天来串门，你用了半个月才把距离拉开。你想，人和人之间最好用的距离，就是点头之交，近了要防，远了要冷。你后来把这个界限也用在别的地方，跟同事、跟客户、跟一些说不清的熟人，都用同一个尺度。有人觉得你不好亲近，可你在意的从来不是这个。你想，一个人身边的位置就那么多，留几个近的，剩下的都保持距离，这样谁也不累。你这么做不是凉薄，是因为你试过把距离拉近，拉近之后那些麻烦你就知道了，知道之后你才选的现在。",
         effects: [
           { path: 'flags.neighbor_deflected', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "只笑一笑，什么也不说",
+        keywords: ["笑一笑", "不解释", "含糊"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.smiled_only", op: "set", value: true },
         ],
       },
     ],
@@ -3652,6 +4282,17 @@ const EVENTS = [
           { path: 'flags.senior_discouraged', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先问她那个学长是怎么回事",
+        keywords: ["那个学长", "怎么回事", "问一句"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.trust", op: "add", value: 3 },
+          { path: "flags.asked_about_senior", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3693,6 +4334,16 @@ const EVENTS = [
         text: "你先花一小时听她讲自己手上那个快黄了的项目，问了些具体的问题，也提了两条建议。她没想到你会对这个感兴趣，讲得很投入。第二天你没开口，她主动替你把线搭上了。你想，人和人之间的来往，最快的路往往不是讲你的需求，是先讲对方的难处。这一条你以前知道，但没这么做，那天你做了，做完才发现它比你想的还管用。后来你把这一条当成一条正经的规矩，叫先问人，再办事，用到现在。后来你把这一条当成一条正经的规矩，叫先问人，再办事，用到现在。有一回你带一个年轻人去办事，他上来就讲自己的需求，讲完对方兴致全无。出来以后你跟他说，你今天少做了一件事，你没问人家最近在忙什么。他愣了一下，说明白了。第二次他去了，回来跟你说办成了。你说怎么成的。他说就先聊了聊对方手上的事，聊完，事情自己就顺了。你点头，说这就对了。有一回他问你，这一条是不是有什么讲究。你说没什么讲究，就是把对方当个人，先问他最近怎么样，再问你能不能帮个忙。他说就这么简单。你说就这么简单，难的是每次都记得这么干。他后来做事一直记得，记得比你还牢。你也从他身上学了一点：有些道理说出来的时候简单，做起来难，所以讲的时候不要讲太多，讲一句他能记住的就行。",
         effects: [
           { path: 'flags.studio_ally', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先什么也不办，回去想想",
+        keywords: ["先不办", "回去想", "再说"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.thought_about_it", op: "set", value: true },
         ],
       },
     ],
@@ -3742,6 +4393,17 @@ const EVENTS = [
           { path: 'flags.pressured_grades', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先问问她自己想不想",
+        keywords: ["你想不想", "问她自己", "先问她"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.trust", op: "add", value: 4 },
+          { path: "flags.asked_her_wish", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3788,6 +4450,16 @@ const EVENTS = [
           { path: 'flags.long_grudge', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先按他的意见改一版",
+        keywords: ["按他的改", "改一版", "照他说的"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.revised_to_his", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3829,6 +4501,27 @@ const EVENTS = [
           { path: 'actors.kin.stats.safety', op: 'sub', value: 15 },
           { path: 'flags.waited_till_dawn', op: 'set', value: true },
           { path: 'flags.path_seeker', op: 'set', value: '决裂' },
+        ],
+      },
+      {
+        key: "C",
+        label: "先隔着门说两句话",
+        keywords: ["隔着门", "说两句", "先问问"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 4 },
+          { path: "flags.through_door", op: "set", value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "天亮之前再看一眼猫眼",
+        keywords: ["再看一眼", "猫眼", "确认"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.checked_once_more", op: "set", value: true },
         ],
       },
     ],
@@ -3881,6 +4574,17 @@ const EVENTS = [
           { path: 'flags.unequal_terms', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先听她把条件说完",
+        keywords: ["先听她说完", "条件", "别打断"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 6 },
+          { path: "flags.heard_terms", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3929,6 +4633,17 @@ const EVENTS = [
           { path: 'flags.kin_route_frozen', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先承认自己听懂了",
+        keywords: ["我听懂了", "我知道", "承认"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.kin.stats.trust", op: "add", value: 6 },
+          { path: "flags.understood_out_loud", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -3975,6 +4690,17 @@ const EVENTS = [
           { path: 'flags.discouraged_her_work', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "先问她想开成什么样",
+        keywords: ["想开成什么样", "她的打算", "问一句"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "actors.seeker.stats.trust", op: "add", value: 5 },
+          { path: "flags.asked_her_plan", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -4016,6 +4742,16 @@ const EVENTS = [
         text: "你避而不谈。她没有再问第三次。第二天她照常办事，照常说话，只是再也不提这件事，像是它从来没有被问出口过。你以为这样就过去了，直到很久以后你才明白，一个人问两次被回避，就不会有第三次了，不是她不想问，是她已经知道答案了。有些关系的结束不需要谁宣布，它就在那第二次的沉默里，安安静静地发生了。你后来想起这件事，最后悔的不是没给答案，是那两次回避里，你连一句真话都没让她听见。你后来想起这件事，最后悔的不是没给答案，是那两次回避里，你连一句真话都没让她听见。你没说不行，也没说行，你只是不谈。对她来说，不谈比不行还难，因为不行至少是个答案，不谈是把她挂在那里。这件事你后来在别处也犯过一次，犯完你才真正把这一课记住：如果一个人认真问你要一个答案，你可以给不了，但要告诉他你给不了，而不是假装他没问过。你才明白，回避和拖，看起来像缓兵之计，其实是在替对方延长痛苦，而延长的部分，往往比结果本身更让人难受。你后来把这条规矩写在纸上，贴在书桌边上，不是为了给谁看，是为了每次遇到这种事的时候，能先看一眼那张纸，再决定怎么开口。你发现，只要你能把话说出口，那些事就没有你想象的那么难收场。",
         effects: [
           { path: 'flags.suwan_closed', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先说一半，剩下的明天说",
+        keywords: ["先说一半", "明天再说", "半句"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.half_today", op: "set", value: true },
         ],
       },
     ],
@@ -4062,6 +4798,17 @@ const EVENTS = [
           { path: 'flags.xunuo_missed', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "去，但坐最后一排",
+        keywords: ["坐后面", "最后一排", "不打扰"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.xunuo_attended", op: "set", value: true },
+          { path: "flags.sat_back", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -4102,6 +4849,16 @@ const EVENTS = [
         text: "你不再回复。三个月后你在一档节目里看见她，她改了发型，看起来比之前好，话也比以前多。你看了两分钟，换了台。你没有觉得自己做错了，只是明白了一件事：一段关系要断，最快的办法不是吵，是不回应，因为不回应会让对方的每一句话都落进空里，落几次之后，她就不说了，也就断了。你用的是这个办法，代价是你再也没有跟她说清楚过，哪怕一句。代价是你再也没有跟她说清楚过，哪怕一句。你后来偶尔会在深夜里想，如果当初回一句，会说些什么。你想了几次，都没想出来，因为你们之间其实没有什么需要说清楚的，你们只是有过一段时间离得比较近，然后没有继续。这件事你想明白之后，就不再想了。有些人走掉，不是因为你做错了什么，只是因为你们恰好都往前走了，而走的方向不一样。这句话你后来跟一个年轻人说过，他当时正在为一段没结果的感情难受。他听完说，那不就是错过吗。你想了想，说错过是要两个人都想往一块走的，你们不是错过，你们只是走开了。他后来没再提这件事，你想他大概是认了，认了就好了。你后来把这件事也想通了，只是通得慢了些，比那个年轻人晚了好几年。想通之后你也没有去找她，因为找回来也没有用，你们之间那段没走完的路，早就在不回应里烂掉了，找回来也是一具空壳。",
         effects: [
           { path: 'flags.jingtian_broken', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先定个时间，到时候再说",
+        keywords: ["定个时间", "到时候", "以后说"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.jingtian_kept", op: "set", value: true },
         ],
       },
     ],
@@ -4147,6 +4904,17 @@ const EVENTS = [
           { path: 'flags.power_imbalance', op: 'set', value: true },
         ],
       },
+      {
+        key: "D",
+        label: "把话岔到工作上",
+        keywords: ["说工作", "岔开", "聊报表"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.shenzhiyi_clear", op: "set", value: true },
+          { path: "flags.work_talk", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -4190,6 +4958,17 @@ const EVENTS = [
         text: "你说没有交易可做。他笑了笑，靠回椅背，一句话也没再说。那间屋子里安静了很久，最后是他先开口，说那就这样吧。他没有恼，因为一个手上没有牌的人，也没有资格恼。你走出那扇门的时候想，不做交易有时候是最省事的，因为它不给你留下任何要还的东西。可你也知道，省事的另一面是，你从他这里，从此什么也拿不到了。那之后你在别的地方又见过他一次，他装作不认识你，你也装作不认识他。你从那扇门里走出来的时候天已经黑了，你在楼下站了一会儿才去开车。你想，不做交易这件事，说起来简单，做起来要在当下忍住一样东西：忍住那个马上就能得到的答案。你忍住了，代价是你多花了两个月，也多绕了一段路。可那两个月的收获是别的：你手里的每一条线都是自己走出来的，没有一条是别人递的，所以后来谁都没法说你被人喂过。你在心里把这件事又过了一遍，过完你确认自己没有做错，只是有点空白，像是办完一件事之后那种空。你把这种空记着，当作做对一件事的代价：做对了事，不一定痛快，有时候只是安静，安静得让人想找个人说说话，可你那晚谁都没找。你从那栋楼里出来的时候回头看了一眼，楼上有一扇窗亮着，很快就灭了。",
         effects: [
           { path: 'flags.truth_suspended', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先让他自己说，不引导",
+        keywords: ["你自己说", "不引导", "听着"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "clues", op: "push", value: "S10" },
+          { path: "flags.let_him_talk", op: "set", value: true },
         ],
       },
     ],
@@ -4238,6 +5017,16 @@ const EVENTS = [
           { path: 'actors.collector.stats.alertness', op: 'add', value: 20 },
         ],
       },
+      {
+        key: "D",
+        label: "先给她一天时间考虑",
+        keywords: ["给你一天", "考虑一下", "不急"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.gave_a_day", op: "set", value: true },
+        ],
+      },
     ],
   },
 
@@ -4281,6 +5070,17 @@ const EVENTS = [
         effects: [
           { path: 'flags.police_trust', op: 'sub', value: 10 },
           { path: 'flags.police_relation_hurt', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先问清楚那条线是谁的",
+        keywords: ["这条线是谁的", "谁的案子", "问清楚"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.police_trust", op: "add", value: 5 },
+          { path: "flags.asked_whose_line", op: "set", value: true },
         ],
       },
     ],
@@ -4327,6 +5127,16 @@ const EVENTS = [
         text: "你把条款推了回去。任命暂缓，你的名字在名单上停了很久。那段时间你手上的事照做，只是别人看你的眼神变了，像是在看一个不识时务的人。你没有解释，因为解释就是把条件再讲一遍，而你不想再讲。半年后那个位置给了别人，你没觉得意外。你想，这一次你选的不是位置，是自己那条线，选完了你自己知道，也就够了。后来你在别的事上又遇到类似的选择，每一次你都选得不快，但不后悔。后来你在别的事上又遇到类似的选择，每一次你都选得不快，但不后悔。你慢慢明白，人做选择的时候，选的其实不是那条路好不好，是自己能不能担得住。有些路明明更好，你担不住，那就不是你的路。你想通这一点之后，做事反而利落了，因为不用再算那么多，只要问自己一句，这个我担得住吗。后来你在别的事上又遇到类似的选择，每一次你都选得不快，但不后悔。你想，人这一辈子，能守住的东西不多，守住了的，往往就是那几样最不起眼的，比如一句能站得住的话，比如一个不用看别人脸色的决定。那些拿出去换了位置的，后来大多也没觉得值，因为位置这东西，坐上去才知道它没那么好。你那天没换，是想明白了这一点。",
         effects: [
           { path: 'flags.career_stalled', op: 'set', value: true },
+        ],
+      },
+      {
+        key: "D",
+        label: "先把附加条款问清楚",
+        keywords: ["附加条款", "问清楚", "写的是什么"],
+        cond: null,
+        text: '',
+        effects: [
+          { path: "flags.asked_terms", op: "set", value: true },
         ],
       },
     ],

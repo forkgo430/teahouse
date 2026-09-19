@@ -68,6 +68,29 @@ test('世界里的条件字段都是可判定的纯数据，不是代码字符�
   }
 });
 
+test('§13.2：每个事件至少 4 个选项，且主线正文已经写好', () => {
+  const w = world();
+  for (const e of w.events) {
+    assert.ok(e.branches.length >= 4,
+      `${e.id} 只有 ${e.branches.length} 个选项（§13.2 要求 4–6）`);
+    // 「只做最优主线剧情」的落地：每个事件至少有一支的正文是写好的，
+    // 其余留空给模型现场创作 —— 全空就等于这个事件没有主线。
+    const written = e.branches.filter(b => String(b.text ?? '').trim() !== '');
+    assert.ok(written.length >= 1, `${e.id} 没有任何一支写了正文（主线缺失）`);
+  }
+});
+
+test('留白的选项必须自带 effects —— 否则点了不动状态', () => {
+  const w = world();
+  for (const e of w.events) {
+    for (const b of e.branches) {
+      if (String(b.text ?? '').trim() !== '') continue;   // 有正文的不查
+      assert.ok(Array.isArray(b.effects) && b.effects.length > 0,
+        `${e.id}.${b.key} 正文留白却没有 effects：模型只写正文、不提 effects，这一支会是死选项`);
+    }
+  }
+});
+
 test('事件集能过一次 schema 校验（非法数据不许静默通过）', () => {
   const { ok, issues } = validateEventSet(RAINNIGHT_MODE.world.events);
   assert.equal(ok, true, JSON.stringify(issues));

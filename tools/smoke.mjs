@@ -286,11 +286,12 @@ async function run() {
           await wait(200);
           const mechSec = mechHead.closest('.ne-fold');
           const mtxt = mechSec.innerText || '';
-          for (const label of ['当轮意愿与边界', '保底推进', '资源调用',
-            '燕双鹰卡组', '亲密状态卡', '触发表']) {
+          for (const label of ['边界闸门', '结局判定', '保底推进', '模型可提 effects',
+            '禁止矩阵', '既有关系', '叙事规则', '角色人设', '玩家卡', '触发表',
+            '资源调用', '燕双鹰卡组', '亲密状态卡']) {
             if (!mtxt.includes(label)) R.missing.push('雨夜机制缺「' + label + '」');
           }
-          R.notes.push('雨夜机制开关=' + mechSec.querySelectorAll('.ne-field button').length);
+          R.notes.push('雨夜机制控件=' + mechSec.querySelectorAll('.ne-field button').length);
 
           const resRow = [...mechSec.querySelectorAll('.ne-field')]
             .find(f => f.textContent.includes('资源调用'));

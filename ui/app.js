@@ -112,30 +112,55 @@ function writeVolume(v) {
    引擎侧那几项（保底推进、结局门槛）有个硬约束：**引擎不读 localStorage**。
    所以它们经 `world.rules` 传进去（`applyMechs()` 每局装配时覆盖一遍）。 */
 const RAIN_MECHANICS = Object.freeze([
-  { key: 'boundary', def: true, label: '当轮意愿与边界',
+  /* ── 引擎判定类：决定「发生什么」 ── */
+  { key: 'boundary', def: true, label: '边界闸门',
     note: '推进前先看当轮意愿有没有登记；关掉＝不过这道闸，也不显示意愿卡' },
+  { key: 'endingResolve', def: 'strict', label: '结局判定',
+    note: '严格＝条件满足且过了门槛天数才结算；宽松＝忽略门槛；关闭＝完全不结算（永远不封盘）',
+    options: [{ v: 'strict', label: '严格' }, { v: 'loose', label: '宽松' }, { v: 'off', label: '不结算' }] },
   { key: 'stall', def: true, label: '保底推进（§13.3）',
     note: '连续几轮没进展时把事件池收窄到推得起来的那些；关掉＝完全不干预' },
+
+  /* ── 权力类：决定「谁能改状态」 ── */
+  { key: 'modelEffects', def: 'whitelist', label: '模型可提 effects',
+    note: '关＝模型只能写正文；白名单＝只准动描写与小幅数值，碰线索/阶段/路线一律丢弃；宽＝再放开阶段与路线',
+    options: [{ v: 'off', label: '关' }, { v: 'whitelist', label: '白名单' }, { v: 'wide', label: '宽' }] },
+
+  /* ── 软引导类：决定「模型看到什么」 ── */
+  { key: 'prohibitions', def: true, label: '禁止矩阵（§9.4）',
+    note: '关掉就不发【禁止】段 —— 模型就没被明确告知哪些线不能越' },
+  { key: 'relations', def: true, label: '既有关系（§6）',
+    note: '关掉就不发【既有关系】段' },
+  { key: 'narrativeRules', def: true, label: '叙事规则（§12.1）',
+    note: '人称/时态/文学化/感官/心理那 12 条' },
+  { key: 'personas', def: true, label: '角色人设（§24.1）',
+    note: '性格核心/标志动作/对玩家/压力与自尊反应' },
+  { key: 'playerCard', def: true, label: '玩家卡（§5）',
+    note: '玩家的身份/职业/资源/立场' },
+  { key: 'triggers', def: true, label: '触发表（§16）',
+    note: '玩家原话命中关键词时，提示「相关但还没发生」的事件' },
+
+  /* ── 内容模块 ── */
   { key: 'resources', def: true, label: '资源调用（§18）',
     note: '律师/银行/警方/管家/政界 的调用入口' },
   { key: 'cards', def: true, label: '燕双鹰卡组（§5.1）',
     note: '一次性卡片技能' },
   { key: 'intimacy', def: true, label: '亲密状态卡（§23）',
     note: '角色卡上的「亲密记录」一行' },
-  { key: 'triggers', def: true, label: '触发表（§16）',
-    note: '玩家原话命中关键词时，提示「相关但还没发生」的事件' },
 ]);
 
 function mechDef(key) { return RAIN_MECHANICS.find(m => m.key === key); }
 
-/** 读一个机制开关；没存过就用它的默认值。 */
-function readMech(key) {
-  const def = mechDef(key);
-  const fallback = def ? def.def : true;
+/** 读一个机制开关。布尔项返回 true/false；**档位项返回档位字符串**。 */
+function readMech(key, fallback) {
+  const item = mechDef(key);
+  const dflt = item ? item.def : (fallback === undefined ? true : fallback);
   try {
     const v = storage?.getItem(`ne.mech.${key}`);
-    return v === null || v === undefined ? fallback : v !== '0';
-  } catch { return fallback; }
+    if (item?.options) return v || dflt;          // 档位：空就用默认档
+    if (v === null || v === undefined) return dflt;
+    return v !== '0';
+  } catch { return dflt; }
 }
 
 function writeMech(key, on) {
@@ -153,6 +178,8 @@ function applyMechs(w) {
   if (!w) return w;
   if (w.rules) {
     w.rules.stall = readMech('stall');
+    w.rules.endingResolve = readMech('endingResolve');
+    w.rules.modelEffects = readMech('modelEffects');
   }
   /* 边界机制关掉时**不挂闸门** —— 这是玩家的开关，不是改数据：
      世界定义里的 guards 原样保留，只是这一局不启用。 */
@@ -3055,7 +3082,7 @@ function startMain(root, opts = {}) {
        关掉「燕双鹰卡组」不许去删那 8 张卡。引擎侧那几项（保底推进 / 结局门槛）
        经 world.rules 生效，见 applyMechs()。 */
     if (mode === 'rainnight') {
-      const onCount = RAIN_MECHANICS.filter(m => readMech(m.key)).length;
+      const onCount = RAIN_MECHANICS.filter(m => !!readMech(m.key)).length;
       const mecFold = foldSection('雨夜机制', {
         key: 'rainmech', note: `${onCount} / ${RAIN_MECHANICS.length} 启用`,
       });
@@ -3065,6 +3092,34 @@ function startMain(root, opts = {}) {
         const row = el('div', 'ne-field');
         row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;';
         row.appendChild(el('span', 'ne-field-label', m.label));
+
+        if (m.options) {
+          // 档位型：一排小按钮，当前档高亮
+          const box = el('div');
+          box.style.cssText = 'display:flex;gap:6px;';
+          const repaint = () => {
+            const cur = readMech(m.key);
+            for (const b of box.children) b.classList.toggle('ne-btn-primary', b.dataset.v === cur);
+          };
+          for (const o of m.options) {
+            const b = el('button', 'ne-btn', o.label);
+            b.type = 'button';
+            b.dataset.v = o.v;
+            b.dataset.sfx = 'select';
+            b.addEventListener('click', () => {
+              writeMech(m.key, o.v);
+              repaint();
+              applyMechs(world);
+              render();
+              appendSystem(`雨夜机制「${m.label}」→ ${o.label}`, 'warn');
+            });
+            box.appendChild(b);
+          }
+          repaint();
+          row.appendChild(box);
+          mecSec.appendChild(row);
+          continue;
+        }
 
         const on0 = readMech(m.key);
         const b = el('button', `ne-btn${on0 ? ' ne-btn-primary' : ''}`, on0 ? '已开启' : '已关闭');
@@ -3461,6 +3516,17 @@ function startMain(root, opts = {}) {
       }
       persistNarration(narration.text);
       audio.settles();
+
+      /* 「模型可提 effects」：把模型提交、且过了白名单校验的那些落进状态。
+         被丢掉的**不静默** —— 逐条报出来，玩家看得见引擎挡了什么。 */
+      if (narration.extraEffects?.length) {
+        store.dispatch(narration.extraEffects.map(e => ({ ...e })));
+        appendSystem(`模型提交的状态变更已生效 ${narration.extraEffects.length} 条`, 'good');
+      }
+      if (narration.rejectedEffects?.length) {
+        appendSystem(`模型提交的状态变更被挡下 ${narration.rejectedEffects.length} 条：`
+          + narration.rejectedEffects.map(r => r.why).join('；'), 'warn');
+      }
 
       if (report.achievements.length > 0) audio.unlock();
       if (report.ending) {

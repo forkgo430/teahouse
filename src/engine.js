@@ -542,6 +542,21 @@ export function checkAchievements(state, world) {
 
 /** ⑧ 结局：最多命中一个，priority 高者优先 */
 export function checkEndings(state, world) {
+  /* 「结局判定」三档（雨夜机制开关，经 world.rules 传进来）：
+       strict（默认）—— 条件满足 **且** 过了门槛天数，才结算
+       loose         —— 忽略门槛，条件一满足就结算
+       off           —— 完全不结算（纯自由走，永远不封盘）
+     门槛以前是**写死在 28 个结局的条件里**的（`atDay(END_MIN_DAY)`），关不掉也改不动；
+     现在收拢成这一道总闸 —— 开关才有地方落。 */
+  /* 缺省是 loose（不设门槛）—— 门槛由**模式声明**才生效，
+     引擎不该把「60 天」强加给所有世界（合成测试世界没声明就被挡了）。 */
+  const gate = world?.rules?.endingResolve ?? 'loose';
+  if (gate === 'off') return [];
+  if (gate === 'strict') {
+    const minDay = Number(world?.rules?.endingMinDay ?? 60) || 0;
+    if ((Number(state?.clock?.day) || 0) <= minDay) return [];
+  }
+
   const got = new Set(state.endings ?? []);
   const hits = (world.endings ?? [])
     .filter(e => !got.has(e.id) && evaluate(e.cond ?? null, state))

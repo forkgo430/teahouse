@@ -1,3 +1,4 @@
+import { PROPOSE_OPEN, PROPOSE_CLOSE } from './propose.js';
 /**
  * 提示词构造与响应解析。
  *
@@ -169,7 +170,7 @@ export function buildChoiceMessages({ brief, situation, event, options, playerIn
  * @param {string} [ctx.lore] 世界书扫出来的相关设定
  * @param {object} [ctx.style] 玩家的文风配置（见 src/style.js）；不传就是默认
  */
-export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null, playerCard = null, narrativeRules = null, triggerHit = '' }) {
+export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null, playerCard = null, narrativeRules = null, triggerHit = '', proposeEffects = false }) {
   const parts = [];
   if (brief) parts.push(`【背景】\n${brief}`);
   parts.push(`【当前局面】\n${situation}`);
@@ -227,6 +228,24 @@ export function buildNarrationMessages({ brief, situation, event, branch, report
     parts.push(
       '【本轮状态卡（引擎已算好，原样放入正文末尾，一个字都不要改）】\n'
       + statusCard,
+    );
+  }
+
+  /* 「模型可提 effects」：允许时明确要求它**在正文之外**另交一组状态变更，
+     并且把口径写清楚（只动描写与小幅数值，别碰线索/阶段/路线）。
+     真正的把关在 src/propose.js —— 这里只是让它别乱写。 */
+  if (proposeEffects) {
+    parts.push(
+      `【状态变更（可选）】\n`
+      + `正文写完之后，如果你认为这一轮让某些"描写"发生了变化（情绪、穿着、身体状态、隐藏打算），`
+      + `或者某个数值该小幅增减，就在最后另起一行按下面的格式交出来：\n`
+      + `${PROPOSE_OPEN}\n`
+      + `[{"path":"actors.seeker.emotion","op":"set","value":"撑不住了"},`
+      + `{"path":"actors.seeker.stats.trust","op":"add","value":3}]\n`
+      + `${PROPOSE_CLOSE}\n`
+      + `只准动描写字段与小幅数值增减（单次不超过 8，最多 3 条）。`
+      + `线索、调查阶段、路线、同意边界、结局、成就 —— 这些**不要碰**，引擎会直接丢掉。`
+      + `没有变化就不写这一块。`,
     );
   }
 

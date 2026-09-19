@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { RAINNIGHT_MODE, RAIN_PATHS, createRainWorld, rainInitialState } from '../data/mode-rain.js';
-import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch, pickEvent } from '../src/engine.js';
+import { createWorld, nextTurn, applyTurn, buildOptions, selectBranch, pickEvent, checkEndings } from '../src/engine.js';
 import { createDemoWorld } from '../data/demo.js';
 import { createInitialState, validateEventSet, validateCondition } from '../src/schema.js';
 import { parseCardMarkup } from '../src/card.js';
@@ -503,6 +503,35 @@ test('雨夜机制：关掉保底推进 → 事件池完全不收窄', () => {
   // 没声明 rules 的世界保持旧行为（默认开）
   const bare = createWorld({ events: [mk('bigRel', '关系线', true, 1), mk('inv', '调查线', false, 99)] });
   assert.equal(pickEvent(stalled, bare).id, 'bigRel', '未声明 rules 的世界应保持默认开');
+});
+
+
+/* ── 雨夜机制：结局判定三档 ── */
+
+test('结局判定三档：严格挡门槛 / 宽松忽略门槛 / 关闭不结算', () => {
+  const events = [{
+    id: 'X', title: 'X', when: { day: 1 },
+    branches: [{ key: 'A', label: 'A', cond: null, text: '',
+      effects: [{ path: 'flags.done', op: 'set', value: true }] }],
+  }];
+  const ends = [{ id: 'END_X', title: '结局', priority: 1, cond: { all: [{ path: 'flags.done', op: '==', value: true }] } }];
+  const early = { ...createInitialState({}), flags: { done: true }, clock: { day: 3, slot: 'night' } };
+
+  const strict = createWorld({ events, endings: ends, rules: { endingResolve: 'strict', endingMinDay: 60 } });
+  assert.equal(checkEndings(early, strict).length, 0, '严格档：第 3 天不该结算');
+
+  const late = { ...early, clock: { day: 90, slot: 'night' } };
+  assert.equal(checkEndings(late, strict).length, 1, '严格档：过了门槛该结算');
+
+  const loose = createWorld({ events, endings: ends, rules: { endingResolve: 'loose' } });
+  assert.equal(checkEndings(early, loose).length, 1, '宽松档：条件满足即结算');
+
+  const off = createWorld({ events, endings: ends, rules: { endingResolve: 'off' } });
+  assert.equal(checkEndings(late, off).length, 0, '关闭档：永不结算');
+
+  // 没声明 rules 的世界保持旧行为（不设门槛）
+  const bare = createWorld({ events, endings: ends });
+  assert.equal(checkEndings(early, bare).length, 1, '未声明的世界不该被强加门槛');
 });
 
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {

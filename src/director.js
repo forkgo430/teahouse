@@ -345,17 +345,21 @@ export function createDirector({ world, client = null, onDelta = null, options =
           lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
           style: settings.narrationStyle,
           statusCard: statusCardFor(state, report),
-          // §9.4 禁止矩阵：模式声明的口径，原文照发
-          prohibitions: world.prohibitions ?? null,
-          relations: world.relations ?? null,
-          playerCard: world.playerCard ?? null,
-          narrativeRules: world.narrativeRules ?? null,
+          /* ── 提示词里发什么，全部由「雨夜机制」开关决定 ──
+             开关读法从 UI 递进来（settings.mech）—— 引擎与 director 都不读 localStorage。
+             每一项关掉就是"这一段不发"，**不是**去改数据。 */
+          prohibitions: settings.mech('prohibitions') ? (world.prohibitions ?? null) : null,
+          relations: settings.mech('relations') ? (world.relations ?? null) : null,
+          playerCard: settings.mech('playerCard') ? (world.playerCard ?? null) : null,
+          narrativeRules: settings.mech('narrativeRules') ? (world.narrativeRules ?? null) : null,
+          proposeEffects: settings.mech('modelEffects', 'off') !== 'off',
           // §16 触发表：只在玩家原话确实命中关键词时才注入（没命中就是空串）
           triggerHit: settings.mech('triggers')
             ? triggerNote(matchTriggers(ctx.inbound, world.triggers), state, world)
             : '',
           // §24.1 角色人设：只发有 persona 的角色（雨夜里就是林晚晴与周若宁）
-          personas: (world.actorDefs ?? []).filter(a => a.persona).map(a => ({
+          personas: settings.mech('personas')
+            ? (world.actorDefs ?? []).filter(a => a.persona).map(a => ({
             name: a.name,
             fields: [
               ...(a.persona.core ?? []),
@@ -363,8 +367,9 @@ export function createDirector({ world, client = null, onDelta = null, options =
               ...(a.persona.toPlayer ?? []).map(x => `对玩家：${x}`),
               ...(a.persona.stress ?? []).map(x => `压力反应：${x}`),
               ...(a.persona.selfEsteem ?? []).map(x => `自尊反应：${x}`),
-            ],
-          })),
+              ],
+            }))
+            : null,
         });
 
         // 玩家自己的提示词栈（在预设系统提示之下、引擎规则之上）

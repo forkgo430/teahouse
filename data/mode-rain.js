@@ -5201,9 +5201,12 @@ const EVENTS = [
    这里用 history 的下标存在性当轮次信号，比给 state 新加字段轻。 */
 const MIN_TURNS = 6;
 const afterTurns = (n) => ({ path: `history[${n - 1}]`, op: 'exists' });
-/** 结局门槛：剧情推进到最后（真实天数 > N）才允许结算 */
+/**
+ * 结局门槛的天数（真实天数，day1 = 2025-09-26）。
+ * ⚠ 它**不在结局条件里**了 —— 由 `checkEndings()` 统一把关，
+ * 受「雨夜机制 → 结局判定」三档开关控制（strict / loose / off）。
+ */
 const END_MIN_DAY = 60;
-const atDay = (n) => ({ path: 'clock.day', op: '>', value: n });
 
 const ENDINGS = [
   {
@@ -5214,7 +5217,6 @@ const ENDINGS = [
     note: '信任塌到底之后，屋子还在，人散了。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'actors.seeker.stats.trust', op: '<=', value: 20 },
       ],
@@ -5228,7 +5230,6 @@ const ENDINGS = [
     note: '空壳、走账、套牌 —— 你终于看清了整张网，也包括自己在里面。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         { path: 'flags.case_stage', op: '>=', value: 6 },
         { path: 'clues', op: 'contains', value: 'D5' },
       ],
@@ -5242,7 +5243,6 @@ const ENDINGS = [
     note: '他回来了，并且把该认的都认了。这不算圆满，但算结算。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         { path: 'flags.believed_him', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 6 },
       ],
@@ -5256,7 +5256,6 @@ const ENDINGS = [
     note: '你在同一个地方，信了同一个人两次。第二次代价更大。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         { path: 'flags.played_along', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 6 },
       ],
@@ -5270,7 +5269,6 @@ const ENDINGS = [
     note: '账是清了。她要还的，从此变成另一种东西。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.paid_off', op: '==', value: true },
       ],
@@ -5284,7 +5282,6 @@ const ENDINGS = [
     note: '没有惊雷。客厅一盏灯，书房一盏灯，都亮着。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         { path: 'flags.took_them_in', op: '==', value: true },
         { path: 'flags.their_choice', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 6 },
@@ -5299,7 +5296,6 @@ const ENDINGS = [
     note: '船开走的时候，她站在岸上，没有哭。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         { path: 'flags.they_chose', op: '==', value: true },
         { path: 'flags.case_stage', op: '>=', value: 4 },
       ],
@@ -5313,7 +5309,6 @@ const ENDINGS = [
     note: '三间房的钥匙交了，最后一箱书搬上楼，天就亮了。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.moved_together', op: '==', value: true },
       ],
@@ -5327,7 +5322,6 @@ const ENDINGS = [
     note: '你摸到了主干的形状，但没有摸到最后那一节。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.case_stage', op: '>=', value: 3 },
       ],
@@ -5343,7 +5337,6 @@ const ENDINGS = [
     // 直接写 <= 会在"还没开始查"时反而不成立
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.gave_up', op: '==', value: true },
       ],
@@ -5356,7 +5349,6 @@ const ENDINGS = [
     tier: 'B',
     note: '雨停了。事情没有解决，但也没有更坏。',
     cond: { all: [
-        atDay(END_MIN_DAY),
  afterTurns(MIN_TURNS), { path: 'flags.declined', op: '==', value: true } ] },
   },
   /* 关系线结局 —— 同样要带轮次前提，否则开局就成立 */
@@ -5367,7 +5359,6 @@ const ENDINGS = [
     tier: 'A',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '情感依赖' },
         { path: 'flags.case_stage', op: '>=', value: 4 },
@@ -5381,7 +5372,6 @@ const ENDINGS = [
     tier: 'A',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_kin', op: '==', value: '独立' },
       ],
@@ -5394,7 +5384,6 @@ const ENDINGS = [
     tier: 'C',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '决裂' },
       ],
@@ -5414,7 +5403,6 @@ const ENDINGS = [
     note: '她说留下来，是因为她想留下来 —— 不是因为她没地方去。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '伴侣-共享' },
         { path: 'flags.case_stage', op: '>=', value: 4 },
@@ -5429,7 +5417,6 @@ const ENDINGS = [
     note: '她把大学的地址写给你的时候，用的是「我们」这个词。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_kin', op: '==', value: '伴侣-共享' },
         { path: 'flags.kin_enrolled', op: '==', value: true },
@@ -5444,7 +5431,6 @@ const ENDINGS = [
     note: '最好的答案是那个没有给的答案。她自己去念书了。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_kin', op: '==', value: '独立' },
         { not: { path: 'flags.first_time_kin', op: '==', value: true } },
@@ -5459,7 +5445,6 @@ const ENDINGS = [
     note: '三个人在同一张桌子上吃饭，谁也没有先低头。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.path_seeker', op: '==', value: '伴侣-共享' },
         { path: 'flags.path_kin', op: '==', value: '伴侣-共享' },
@@ -5475,7 +5460,6 @@ const ENDINGS = [
     note: '两条线最后撞在了一起 —— 撞上的时候才知道本来就不能并行。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.partner_seeker', op: '==', value: true },
         { path: 'flags.partner_kin', op: '==', value: true },
@@ -5494,7 +5478,6 @@ const ENDINGS = [
     note: '判决书下来了。那三个名字第一次被写在同一张纸上。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.dual_track', op: '==', value: true },
         { path: 'flags.divorce_filed', op: '==', value: true },
@@ -5513,7 +5496,6 @@ const ENDINGS = [
     note: '你要求把授权范围写进文件的那一天，才是真正上任的那一天。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.career_power', op: '==', value: true },
@@ -5531,7 +5513,6 @@ const ENDINGS = [
     note: '位子是坐上了，代价写在附加条款的第二页。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.career_steady', op: '==', value: true },
@@ -5548,7 +5529,6 @@ const ENDINGS = [
     note: '你把重心搬回了家里。职场的名单上没有你了。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.career_stalled', op: '==', value: true },
@@ -5565,7 +5545,6 @@ const ENDINGS = [
     note: '两边的路你同时走通了 —— 这话听着像夸奖，读起来不是。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { path: 'flags.public_relation', op: '==', value: true },
         { path: 'flags.political_capital', op: '>=', value: 18 },
@@ -5580,7 +5559,6 @@ const ENDINGS = [
     note: '你绕过他的那一次，三年以后才回来找你。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.long_grudge', op: '==', value: true },
@@ -5600,7 +5578,6 @@ const ENDINGS = [
     note: '她要的答案你给了，包括坏的那部分。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.suwan_final_answer', op: '==', value: true },
@@ -5617,7 +5594,6 @@ const ENDINGS = [
     note: '第一排的座位一直留着，她谢幕时朝这边看了一眼。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.xunuo_attended', op: '==', value: true },
@@ -5634,7 +5610,6 @@ const ENDINGS = [
     note: '界线划在哪一层，是这整条线唯一的题目。',
     cond: {
       all: [
-        atDay(END_MIN_DAY),
         afterTurns(MIN_TURNS),
         { any: [
           { path: 'flags.shenzhiyi_clear', op: '==', value: true },
@@ -6206,7 +6181,10 @@ export const RAINNIGHT_MODE = {
   rules: {
     consentEnforced: true,
     turnOnlyConsent: true,
-    stall: true,          // §13.3 保底推进；关掉＝完全不干预事件池
+    stall: true,             // §13.3 保底推进；关掉＝完全不干预事件池
+    endingResolve: 'strict', // 结局判定：strict 条件+门槛 / loose 忽略门槛 / off 不结算
+    endingMinDay: 60,        // 门槛天数（真实天数，day1 = 2025-09-26）
+    modelEffects: 'whitelist', // 模型可提 effects：off / whitelist / wide
   },
 
   world: {

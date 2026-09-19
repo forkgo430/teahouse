@@ -345,6 +345,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
           prohibitions: world.prohibitions ?? null,
           relations: world.relations ?? null,
           playerCard: world.playerCard ?? null,
+          narrativeRules: world.narrativeRules ?? null,
           // §24.1 角色人设：只发有 persona 的角色（雨夜里就是林晚晴与周若宁）
           personas: (world.actorDefs ?? []).filter(a => a.persona).map(a => ({
             name: a.name,

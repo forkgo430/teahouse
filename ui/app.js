@@ -929,7 +929,9 @@ function startMain(root, opts = {}) {
   let contextBudget = readJson(CTX_KEY, 6000);
   let promptStack = readJson(STACK_KEY, null) ?? defaultStack(NARRATION_SYSTEM);
   /* 文风：人称 / 语言 / 字数 / 补充要求 + 硬约束开关 */
-  let narrationStyle = normalizeStyle(readJson(STYLE_KEY, {}));
+  /* 模式可以给文风定默认：雨夜的人称默认是「第二/第三人称混合」（§12.1 原文）。
+     玩家自己改过就以存档里的为准 —— 这里只是**没设置过时**的底。 */
+  let narrationStyle = normalizeStyle(readJson(STYLE_KEY, {}), world.defaultStyle ?? undefined);
   /* 正则：区分「从没装过」与「装过但删空了」。
      前者给一份出厂规则（否则面板一片空白，玩家不知道规则长什么样），
      后者尊重玩家的删除 —— 不把规则塞回来。 */

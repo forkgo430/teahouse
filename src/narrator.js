@@ -169,7 +169,7 @@ export function buildChoiceMessages({ brief, situation, event, options, playerIn
  * @param {string} [ctx.lore] 世界书扫出来的相关设定
  * @param {object} [ctx.style] 玩家的文风配置（见 src/style.js）；不传就是默认
  */
-export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null, playerCard = null }) {
+export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null, playerCard = null, narrativeRules = null }) {
   const parts = [];
   if (brief) parts.push(`【背景】\n${brief}`);
   parts.push(`【当前局面】\n${situation}`);
@@ -182,6 +182,11 @@ export function buildNarrationMessages({ brief, situation, event, branch, report
       for (const it of items ?? []) lines.push(`· [${group}] ${it}`);
     }
     if (lines.length) parts.push(`【禁止（违反即作废这一段）】\n${lines.join('\n')}`);
+  }
+
+  /* §12.1 叙事规则：人称/时态/语体/感官/心理……这些决定正文长什么样。 */
+  if (Array.isArray(narrativeRules) && narrativeRules.length) {
+    parts.push(`【叙事规则（§12.1）】\n${narrativeRules.map(x => `· ${x}`).join('\n')}`);
   }
 
   /* §5 玩家变量卡：玩家是谁、能调用什么。经济数据不在这里（以 §10 账本为准）。 */

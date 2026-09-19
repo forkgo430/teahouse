@@ -6296,6 +6296,23 @@ export const RAINNIGHT_MODE = {
       ],
     },
 
+    /* §12.1 叙事规则（原文照录）。「第二人称/第三人称混合」「现在时」「文学化」
+       这几条决定了正文长什么样，不注入的话模型只会写成通用网文。 */
+    narrativeRules: [
+      '人称：第二人称/第三人称混合（玩家一律用「你」，其余人物用第三人称）。',
+      '时态：现在时。',
+      '语体：文学化。',
+      '感官细节：雨声、茶香、木质味、湿冷、布料摩擦、呼吸节奏。',
+      '心理描写：内心想法、隐藏打算。',
+      '对话与动作交替。',
+      '状态面板与叙事分离。',
+      '保留状态字段。',
+      '不替玩家做决定。',
+      '不擅自推进路线。',
+      '每轮结尾提示下一步决策。',
+      '保持角色一致性。',
+    ],
+
     /* §5 玩家变量卡。经济数据不在这里取值（以 §10 账本为唯一真相源），
        文档原文照录，由 director 注入成【玩家】段落。 */
     playerCard: [
@@ -6432,6 +6449,8 @@ export function createRainWorld(createWorldFn) {
     relations: w.relations,
     cards: w.cards,
     playerCard: w.playerCard,
+    narrativeRules: w.narrativeRules,
+    defaultStyle: { person: 'mixed' },
     guards: RAINNIGHT_MODE.guards(),
     /* 模式级字段也要交给世界 —— 它们本来就在 RAINNIGHT_MODE 顶层躺着，
        但从没被传下去：UI 判 `world.rainLevel > 0` 决定起不起 BGM，

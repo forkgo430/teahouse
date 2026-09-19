@@ -95,6 +95,8 @@ export function createWorld(def = {}) {
     relations: def.relations ?? null,       // §6 关系与身份矩阵
     cards: def.cards ?? null,               // §5.1 燕双鹰卡组
     playerCard: def.playerCard ?? null,     // §5 玩家变量卡
+    narrativeRules: def.narrativeRules ?? null, // §12.1 叙事规则
+    defaultStyle: def.defaultStyle ?? null,     // 模式级文风默认（雨夜：混合人称）
 
     index: buildIndex(events),
   };

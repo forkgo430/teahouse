@@ -28,6 +28,12 @@
 
 /** 人称：值直接进提示词，所以写的是模型看得懂的中文，不是内码 */
 export const PERSON_OPTIONS = [
+  /* 《雨与夜-V4.1》§12.1 原文就是「第二人称/第三人称混合」——
+     玩家用「你」，其余人物一律第三人称（名字 / 她 / 他）。
+     雨夜模式的默认人称是这一档，见 mode-rain.js 的 defaultStyle。 */
+  { value: 'mixed', label: '第二/第三人称混合', hint: '雨夜默认',
+    text: '人称用第二人称与第三人称混合：玩家一律用「你」称呼，其余人物一律用第三人称（名字 / 她 / 他），不要用「我」当叙述者。',
+    inline: '第二/第三人称混合（玩家=你，其余人物=第三人称）' },
   { value: 'second', label: '第二人称', hint: '你', text: '用第二人称「你」写。', inline: '用第二人称「你」写' },
   { value: 'first', label: '第一人称', hint: '我', text: '用第一人称「我」写，玩家即叙述者。', inline: '用第一人称「我」写' },
   { value: 'third', label: '第三人称', hint: '他/她', text: '用第三人称写，以玩家角色的名字指代玩家。', inline: '用第三人称写' },
@@ -124,12 +130,12 @@ function pick(options, value, fallback) {
 }
 
 /** 归一化，容忍缺字段与脏值 */
-export function normalizeStyle(raw = {}) {
+export function normalizeStyle(raw = {}, base = DEFAULT_STYLE) {
   return {
-    person: pick(PERSON_OPTIONS, raw.person, DEFAULT_STYLE.person).value,
-    lang: pick(LANG_OPTIONS, raw.lang, DEFAULT_STYLE.lang).value,
-    length: pick(LENGTH_OPTIONS, raw.length, DEFAULT_STYLE.length).value,
-    narrator: pick(NARRATOR_OPTIONS, raw.narrator, DEFAULT_STYLE.narrator).value,
+    person: pick(PERSON_OPTIONS, raw.person, base.person).value,
+    lang: pick(LANG_OPTIONS, raw.lang, base.lang).value,
+    length: pick(LENGTH_OPTIONS, raw.length, base.length).value,
+    narrator: pick(NARRATOR_OPTIONS, raw.narrator, base.narrator).value,
     narratorCustom: typeof raw.narratorCustom === 'string' ? raw.narratorCustom : '',
     extra: typeof raw.extra === 'string' ? raw.extra : '',
     locked: raw.locked !== false,

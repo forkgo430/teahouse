@@ -48,6 +48,7 @@ import {
 import { applyDisplayOutbound, normalizeRule, SHIPPED_RULES } from '../src/regex.js';
 import { scenePanelMarkup } from '../src/scenePanel.js';
 import { callResource, resourceBoard } from '../src/resources.js';
+import { useCard, cardBoard, cardsLeft } from '../src/cards.js';
 import { createBoy, normalizeBoyConfig, DEFAULT_BOY, WRITABLE, BOY_EVENTS } from '../src/boy.js';
 import { buildBoyDocument } from '../src/boyFrame.js';
 
@@ -1631,6 +1632,45 @@ function startMain(root, opts = {}) {
     return sec;
   }
 
+  /* ── §5.1 一次性卡片技能 · 燕双鹰卡组 ──
+     用掉即永久移除，同一轮最多一张 —— 都由引擎裁决（src/cards.js），
+     这里只转述。被动卡（翻滚一闪 / 近战加成）只列出来、不给按钮。 */
+  function cardSection() {
+    const sec = el('section', 'ne-sec');
+    const st = store.getState();
+    sec.appendChild(el('h3', 'ne-sec-title', `燕双鹰卡组 · 剩 ${cardsLeft(st, world)} 张`));
+
+    for (const c of cardBoard(st, world)) {
+      const row = el('div', 'ne-res');
+      if (c.passive) {
+        row.appendChild(el('span', 'ne-cardname', c.name));
+        row.appendChild(el('span', 'ne-res-day', c.note || '被动'));
+        sec.appendChild(row);
+        continue;
+      }
+      const btn = el('button', `ne-btn ne-res-btn${c.available ? '' : ' is-locked'}`, c.name);
+      btn.type = 'button';
+      btn.dataset.sfx = 'toggle';
+      btn.disabled = !c.available;
+      btn.title = c.available
+        ? [c.effect, `用途：${c.usage}`, c.line].filter(Boolean).join('\n')
+        : (c.reason ?? '');
+      btn.addEventListener('click', () => {
+        const r = useCard(store.getState(), world, c.id);
+        if (!r.ok) { appendSystem(`${c.name}：${r.reason}`, 'warn'); return; }
+        store.dispatch(r.effects);
+        render();
+        const bits = ['已使用，永久移除'];
+        if (r.def.line) bits.push(r.def.line);
+        appendSystem(`打出「${c.name}」：${bits.join('　')}`, 'good');
+      });
+      row.appendChild(btn);
+      if (!c.available) row.appendChild(el('span', 'ne-res-why', c.reason ?? ''));
+      sec.appendChild(row);
+    }
+    return sec;
+  }
+
   /* ── §18 可调用资源 ──
      真的能点，点了立刻改状态（推进调查阶段 / 记账 / 进冷却）。
      可用性一律由引擎算（src/resources.js），这里只转述引擎的裁决 ——
@@ -1692,6 +1732,8 @@ function startMain(root, opts = {}) {
 
     // 雨夜专属：§18 资源调用（律师朋友 / 银行渠道 / 警方熟人 / 管家团队 / 政界新星）
     if (world.resources?.length) drawerLeft.appendChild(resourceSection());
+    // 雨夜专属：§5.1 燕双鹰卡组
+    if (world.cards?.length) drawerLeft.appendChild(cardSection());
 
     const s3 = el('section', 'ne-sec');
     s3.appendChild(el('h3', 'ne-sec-title', `线索 · ${view.clues.length}`));

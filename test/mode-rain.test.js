@@ -26,6 +26,7 @@ import {
 import { buildNarrationMessages } from '../src/narrator.js';
 import { callResource, resourceBoard } from '../src/resources.js';
 import { recordIntimacyEffects, intimacyBoard, pauseReason, intimacyLine } from '../src/intimacy.js';
+import { useCard, cardBoard, cardsLeft } from '../src/cards.js';
 
 /* 与 ui/app.js 完全一致的两行装配 —— 这正是当初断掉的地方 */
 const world = () => createRainWorld(createWorld);
@@ -397,6 +398,57 @@ test('§23：亲密记录可写、可查，且暂停理由来自既有状态', (
     [{ path: 'consent.seeker', op: 'set', value: { state: 'refused' } }],
   ).state;
   assert.equal(pauseReason(refused, 'seeker'), '角色已明确拒绝');
+});
+
+
+/* ── §5.1 一次性卡片技能 · 燕双鹰卡组 ── */
+
+test('§5.1：八张卡，被动卡不算可用数', () => {
+  const w = world();
+  const board = cardBoard(initialState(), w);
+  assert.equal(board.length, 8, `卡数 ${board.length}`);
+  assert.equal(board.filter(c => c.passive).length, 2, '被动卡不是 2 张');
+  assert.equal(cardsLeft(initialState(), w), 6, '可主动使用的卡应为 6 张');
+});
+
+test('§5.1：一次性 + 同轮限一张', () => {
+  const w = world();
+  const s = initialState();
+
+  const first = useCard(s, w, 'bullet');
+  assert.ok(first.ok, `第一张卡就用不了：${first.reason}`);
+  const after = applyEffects(s, first.effects).state;
+
+  // 同一张：用后永久移除
+  const again = useCard(after, w, 'bullet');
+  assert.equal(again.ok, false, '同一张卡可以重复使用');
+  assert.match(again.reason, /永久移除/, `理由不对：${again.reason}`);
+
+  // 另一张：同一轮不许
+  const sameTurn = useCard(after, w, 'pocket');
+  assert.equal(sameTurn.ok, false, '同一轮用了第二张');
+  assert.match(sameTurn.reason, /同一轮/, `理由不对：${sameTurn.reason}`);
+
+  // 翻到下一轮就能用
+  const nextTurnState = {
+    ...after,
+    history: Array.from({ length: (after.history ?? []).length + 1 }, (_, i) => ({ turn: i + 1 })),
+  };
+  assert.ok(useCard(nextTurnState, w, 'pocket').ok, '下一轮应该能用另一张');
+});
+
+test('§5.1：卡牌不产生同意或边界效果（文档明写与成人内容无关）', () => {
+  const w = world();
+  const s = initialState();
+  for (const c of cardBoard(s, w)) {
+    if (c.passive || c.used) continue;
+    const r = useCard(s, w, c.id);
+    if (!r.ok) continue;
+    for (const e of r.effects) {
+      assert.ok(!/^(consent|routes|actors\..*\.bounds)/.test(e.path),
+        `卡 ${c.id} 动了 ${e.path} —— 文档写明卡牌不构成任何同意豁免`);
+    }
+  }
 });
 
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {

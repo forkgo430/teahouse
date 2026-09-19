@@ -6296,7 +6296,34 @@ export const RAINNIGHT_MODE = {
       ],
     },
 
-    /* §6 关系与身份矩阵：固定角色与玩家之间**既有**的关系，以及不得违反的规则。
+    /* §5.1 一次性卡片技能 · 燕双鹰卡组。效果/用途/台词按文档原文。
+       「翻滚一闪」「近战加成」文档写明是被动（不主动消耗），标 passive，
+       它们不出现在「可用卡」计数里，也不会被用掉。 */
+    cards: [
+      { id: 'dayang', name: '换命大洋',
+        effect: '燕双鹰身上永远携带着一块大洋，是他的标志性信物。',
+        usage: '交涉筹码、抵命、买通、象征性抵押' },
+      { id: 'bullet', name: '薛定谔子弹',
+        effect: '你拿枪指着燕双鹰脑袋时，你的枪里没有子弹；他自己的枪，子弹数量由他的意志决定。',
+        usage: '对峙局面强制翻转', line: '「我赌你的枪里没有子弹。」' },
+      { id: 'surround', name: '反包围法则',
+        effect: '一旦你带人包围燕双鹰，等同于你落入燕双鹰的包围。', usage: '破局、反制围捕' },
+      { id: 'firstmove', name: '后手先发',
+        effect: '无论你打算做出什么动作，燕双鹰永远比你快一步。', usage: '抢先手、打断对方行动' },
+      { id: 'roll', name: '翻滚一闪',
+        effect: '翻滚期间处于无敌状态，翻滚无冷却。', usage: '规避伤害、脱离危险',
+        passive: true, note: '被动触发，不主动消耗' },
+      { id: 'question', name: '即死问答',
+        effect: '当燕双鹰问你「像你这样的人，要怎么改变呢？」—— 这是高危台词。',
+        usage: '心理压制、定场', note: '台词一旦说出，该局面进入不可逆阶段' },
+      { id: 'pocket', name: '枪械口袋',
+        effect: '无论看起来身上多空，随时能从身后掏出手枪。', usage: '无武器却需持械时' },
+      { id: 'melee', name: '近战加成',
+        effect: '冷兵器对决，攻击速度为对手两倍。', usage: '冷兵器交锋',
+        passive: true, note: '每场对决有效，不消耗卡片' },
+    ],
+
+    /* §5 玩家变量卡的可见部分（经济数据以 §10 账本为准，这里不重复取值）。，以及不得违反的规则。
        它管的是「本来就存在的关系」，和 §7 的路线（会变的进度）不是一回事。 */
     relations: [
       '{{user}} ↔ 林晚晴：小叔子 / 嫂子，礼貌距离，家庭求助',
@@ -6385,6 +6412,7 @@ export function createRainWorld(createWorldFn) {
     actorDefs: w.actors,
     resources: w.resources,
     relations: w.relations,
+    cards: w.cards,
     guards: RAINNIGHT_MODE.guards(),
     /* 模式级字段也要交给世界 —— 它们本来就在 RAINNIGHT_MODE 顶层躺着，
        但从没被传下去：UI 判 `world.rainLevel > 0` 决定起不起 BGM，

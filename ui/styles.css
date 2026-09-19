@@ -4094,3 +4094,6 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
 .ne-res-btn.is-locked { opacity: 0.45; cursor: not-allowed; }
 .ne-res-why,
 .ne-res-day { font-size: 11px; color: var(--ink-3); }
+
+/* §5.1 燕双鹰卡组：被动卡只列名字，不给按钮 */
+.ne-cardname { font-size: 12px; color: var(--ink-2); }

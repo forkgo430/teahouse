@@ -119,6 +119,87 @@ function writeStatusCard(on) {
   try { storage?.setItem(CARD_KEY, on ? '1' : '0'); } catch { /* 忽略 */ }
 }
 
+/* ── 正文样式（2026-09-19） ────────────────────────────────────────
+   读者实际在读的是正文，所以正文的字号 / 行距 / 段距 / 缩进必须能调。
+   这里只负责「值」，画由 CSS 变量接管（styles.css 里读 --reading-*）。 */
+const READING_KEY = 'ne.reading';
+const READING_DEFAULTS = Object.freeze({
+  size: 14.5, leading: 1.95, gap: 15, autoPara: true, indent: false,
+});
+
+function readReading() {
+  const v = readJson(READING_KEY, null);
+  return { ...READING_DEFAULTS, ...(v && typeof v === 'object' ? v : {}) };
+}
+
+/** 把设置套成 :root 上的 CSS 变量。CSS 只管画，不给默认值之外的判断。 */
+function applyReading(v = readReading()) {
+  const root = document.documentElement;
+  root.style.setProperty('--reading-size', `${v.size}px`);
+  root.style.setProperty('--reading-leading', String(v.leading));
+  root.style.setProperty('--reading-gap', `${v.gap}px`);
+  root.style.setProperty('--reading-indent', v.indent ? '2em' : '0em');
+  root.dataset.autoPara = v.autoPara ? 'on' : 'off';
+}
+
+function writeReading(patch) {
+  const next = { ...readReading(), ...patch };
+  writeJson(READING_KEY, next);
+  applyReading(next);
+  return next;
+}
+
+/**
+ * 按句号自动分段。
+ *
+ * 模型与预写正文都常常是"一整坨"，读起来像运行日志。这里按句末标点切句，
+ * 每 1–2 句并成一段。
+ *
+ * ⚠ 只在**纯文本**上做。调用方负责不要把标记区块（`[状态栏]` / `键 = 值`）
+ *   送进来 —— 切坏了标记，整张卡就废了。
+ */
+const SENT_SPLIT = /([。！？]+[」』）】"']?)/;
+
+function autoParagraphs(text, { perPara = 2, minLen = 150 } = {}) {
+  const raw = String(text ?? '');
+  if (!raw.trim()) return [];
+
+  const out = [];
+  for (const block of raw.split(/\n{2,}/)) {
+    const t = block.trim();
+    if (!t) continue;
+    // 已经分过段（段内还有换行）或本来就短 —— 不动它
+    if (t.length <= minLen || t.includes('\n')) { out.push(t); continue; }
+
+    // split 带捕获组会把分隔符单独成项，两两合并还原句子
+    const cells = [];
+    const pieces = t.split(SENT_SPLIT);
+    for (let i = 0; i < pieces.length; i++) {
+      if (i % 2 === 1) cells[cells.length - 1] = (cells[cells.length - 1] ?? '') + pieces[i];
+      else cells.push(pieces[i]);
+    }
+
+    // 引号不配对就并进上一句 —— 否则会切出落单的「
+    const merged = [];
+    const unbalanced = (s) => (s.match(/「/g)?.length ?? 0) !== (s.match(/」/g)?.length ?? 0);
+    for (const s of cells) {
+      if (!s) continue;
+      if (merged.length && unbalanced(merged[merged.length - 1])) merged[merged.length - 1] += s;
+      else merged.push(s);
+    }
+
+    for (let i = 0; i < merged.length; i += perPara) {
+      out.push(merged.slice(i, i + perPara).join(''));
+    }
+  }
+  return out.length ? out : [raw.trim()];
+}
+
+/** 这段文本里有没有"独占一行的标记名"？有就整段别动。 */
+const HAS_BLOCK_LINE = /^\s*\[[^\]\n:]{1,24}\]\s*$/m;
+
+applyReading();
+
 function readSwipeCount() {  try {
     const n = Number(storage?.getItem(SWIPE_KEY));
     return Number.isInteger(n) && n >= 1 && n <= MAX_VARIANTS ? n : DEFAULT_VARIANT_COUNT;
@@ -1170,24 +1251,45 @@ function startMain(root, opts = {}) {
          和 [签:危险] ✓ 会原样显示成一串方括号。
          代价是每段正文多一次正则扫描：只在"确实含方括号冒号"时才走这条路，
          纯正文（绝大多数）还是直接 textContent，不开销。 */
-      const p = el('p', cls);
-      if (/\[[^\]:\n]{1,12}:/.test(src)) renderInlineInto(p, src, el);
-      else p.textContent = src;
-      return p;
+      const nodes = paragraphNodes(src, cls);
+      if (nodes.length === 1) return nodes[0];
+      // 多段：外面套一层 ne-paras，内层每个 <p> 仍是 ne-msg-text
+      const wrap = el('div', 'ne-paras');
+      for (const n of nodes) wrap.appendChild(n);
+      return wrap;
     }
 
     // 有标记：切成段，文本段与组件段分别渲染
     const wrap = el('div', `${cls} ne-rich`);
     for (const seg of parseCardMarkup(src)) {
       if (seg.type === 'text') {
-        const p = el('p', 'ne-msg-text');
-        renderInlineInto(p, seg.text, el);
-        wrap.appendChild(p);
+        for (const p of paragraphNodes(seg.text, 'ne-msg-text')) wrap.appendChild(p);
       } else {
         wrap.appendChild(renderBlock(seg, el));
       }
     }
     return wrap;
+  }
+
+  /**
+   * 一段纯文本 → 若干个 <p>（自动分段 + 行内标记）。
+   * ⚠ 含「独占一行的标记名」的文本**整段不切** —— 那是卡片标记的碎片，
+   *   切了就会把 `[/状态栏]` 之类切散。 */
+  function paragraphNodes(text, objCls) {
+    const t = String(text ?? '');
+    if (HAS_BLOCK_LINE.test(t)) {
+      const p = el('p', objCls);
+      renderInlineInto(p, t, el);
+      return [p];
+    }
+    const reading = readReading();
+    const paras = reading.autoPara ? autoParagraphs(t) : [t];
+    return paras.map((one) => {
+      const p = el('p', objCls);
+      if (/\[[^\]:\n]{1,12}:/.test(one)) renderInlineInto(p, one, el);
+      else p.textContent = one;
+      return p;
+    });
   }
 
   /* ── 多版本切换 ─────────────────────────────────────────── */
@@ -1294,9 +1396,14 @@ function startMain(root, opts = {}) {
     }
 
     history.forEach((record, i) => {
-      if (record.said) stream.appendChild(playerNode(record.said));
+      if (record.said) {
+        const pn = playerNode(record.said);
+        attachMsgFold(pn, `p${i}`);
+        stream.appendChild(pn);
+      }
       const node = narratorNode(record, i);
       attachSpot(node);
+      attachMsgFold(node, `n${record.turn ?? i}`);
       stream.appendChild(node);
     });
 
@@ -1317,6 +1424,41 @@ function startMain(root, opts = {}) {
     const box = el('div', 'ne-msg ne-msg-narrator ne-scene-panel');
     box.appendChild(textBox(scenePanelMarkup(s, world, { actorIds })));
     return box;
+  }
+
+  /* ── 消息可折叠（2026-09-19） ──
+     长正文一屏屏往下滚，回看很难。给每条消息一个折叠开关，
+     收起时只留消息头一行（事件标题 + 第N天·时段）。
+     折叠状态按 key 存 localStorage，重建消息流时恢复。 */
+  const MSGFOLD_KEY = 'ne.msgfold';
+
+  function attachMsgFold(node, key) {
+    const head = node.querySelector('.ne-msg-head');
+    if (!head) return;
+
+    const btn = el('button', 'ne-msg-fold', '⌄');
+    btn.type = 'button';
+    btn.title = '折叠 / 展开这条';
+    btn.setAttribute('aria-label', '折叠或展开这条消息');
+
+    const apply = (collapsed) => {
+      node.classList.toggle('is-collapsed', collapsed);
+      btn.textContent = collapsed ? '›' : '⌄';
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    };
+
+    apply(readJson(MSGFOLD_KEY, {})[key] === true);
+
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const on = !node.classList.contains('is-collapsed');
+      const all = readJson(MSGFOLD_KEY, {});
+      all[key] = on;
+      writeJson(MSGFOLD_KEY, all);
+      apply(on);
+    });
+
+    head.appendChild(btn);
   }
 
   function appendSystem(text, tone) {
@@ -2115,6 +2257,64 @@ function startMain(root, opts = {}) {
 
     card.appendChild(styleFold.sec);
 
+    /* ── 正文样式（2026-09-19） ──
+       读者实际在读的是正文，所以字号 / 行距 / 段距 / 自动分段 / 缩进都得能调。
+       值存 localStorage 并套成 :root 的 CSS 变量，styles.css 只负责画。 */
+    const readFold = foldSection('正文样式', { key: 'reading' });
+    const readSec = readFold.body;
+
+    const mkReadingPicker = (labelText, options, key) => {
+      const field = el('div', 'ne-field');
+      field.appendChild(el('span', 'ne-field-label', labelText));
+      const row = el('div', 'ne-modal-actions');
+      row.style.cssText = 'justify-content:flex-start;flex-wrap:wrap;';
+      for (const o of options) {
+        const b = el('button',
+          `ne-btn${readReading()[key] === o.value ? ' ne-btn-primary' : ''}`, o.label);
+        b.type = 'button';
+        b.dataset.sfx = 'select';
+        b.addEventListener('click', () => {
+          writeReading({ [key]: o.value });
+          for (const sib of row.children) sib.classList.toggle('ne-btn-primary', sib === b);
+        });
+        row.appendChild(b);
+      }
+      field.appendChild(row);
+      return field;
+    };
+
+    const mkReadingSwitch = (labelText, key, onText, offText) => {
+      const on0 = readReading()[key];
+      const field = el('div', 'ne-field');
+      field.appendChild(el('span', 'ne-field-label', labelText));
+      const b = el('button', `ne-btn${on0 ? ' ne-btn-primary' : ''}`, on0 ? onText : offText);
+      b.type = 'button';
+      b.dataset.sfx = 'toggle';
+      b.addEventListener('click', () => {
+        const on = !readReading()[key];
+        writeReading({ [key]: on });
+        b.textContent = on ? onText : offText;
+        b.classList.toggle('ne-btn-primary', on);
+        // 自动分段是开关：重画正文流，关掉立刻回到原始文本
+        if (key === 'autoPara') rebuildStream();
+      });
+      field.appendChild(b);
+      return field;
+    };
+
+    readSec.appendChild(mkReadingPicker('字号',
+      [{ value: 13, label: '小' }, { value: 14.5, label: '中' }, { value: 16, label: '大' }], 'size'));
+    readSec.appendChild(mkReadingPicker('行距',
+      [{ value: 1.7, label: '紧' }, { value: 1.95, label: '标准' }, { value: 2.3, label: '松' }], 'leading'));
+    readSec.appendChild(mkReadingPicker('段间距',
+      [{ value: 8, label: '小' }, { value: 15, label: '中' }, { value: 26, label: '大' }], 'gap'));
+    readSec.appendChild(mkReadingSwitch('自动分段', 'autoPara',
+      '已开启 · 按句号切段', '已关闭 · 保留原文'));
+    readSec.appendChild(mkReadingSwitch('首行缩进', 'indent', '已开启', '已关闭'));
+    readSec.appendChild(el('p', 'ne-modal-warn',
+      '只影响显示，**不改存档里的原文** —— 正文永远按原始文本存，切段只发生在渲染时。'));
+    card.appendChild(readFold.sec);
+
     /* ── 正则后处理 ── */
     const rxFold = foldSection('正则后处理', { key: 'regex', note: `${regexRules.length} 条` });
     const rxSec = rxFold.body;
@@ -2465,7 +2665,8 @@ function startMain(root, opts = {}) {
     card.appendChild(apiFold.sec);
 
     /* 玩法：推进方式 / 群聊 / 玩家设定 —— 常用，默认摊开 */
-    const playFold = foldSection('玩法', { key: 'play', open: true });
+    // 玩法默认折叠（用户要求）：设置里最常动的不是玩法，展开着反而把别组挤下去
+    const playFold = foldSection('玩法', { key: 'play' });
     const play = playFold.body;
 
     const drvField = el('div', 'ne-field');

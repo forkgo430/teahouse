@@ -112,6 +112,46 @@ async function run() {
   }
   R.notes.push('推进后消息数=' + document.querySelectorAll('.ne-msg').length);
 
+  /* ③′ 正文排版与折叠（2026-09-19）——
+     「有元素」不等于「有效果」：这里量的是**计算样式与真实交互结果**。 */
+  {
+    const folds = document.querySelectorAll('.ne-msg-fold');
+    if (folds.length === 0) R.missing.push('没有 .ne-msg-fold（消息折叠按钮没渲染）');
+    else {
+      const first = folds[0];
+      const host = first.closest('.ne-msg');
+      first.click();
+      await wait(120);
+      const collapsed = host.classList.contains('is-collapsed');
+      if (!collapsed) R.missing.push('点折叠按钮后消息没有 is-collapsed');
+      else {
+        const body = [...host.children].find(c => !c.classList.contains('ne-msg-head'));
+        if (body && getComputedStyle(body).display !== 'none') {
+          R.missing.push('折叠后正文仍然可见（.is-collapsed 的 CSS 没生效）');
+        }
+        if (first.getAttribute('aria-expanded') !== 'false') {
+          R.missing.push('折叠后 aria-expanded 没有变成 false');
+        }
+      }
+      first.click();   // 展开回去，别影响后面的检查
+      await wait(120);
+    }
+
+    // 自动分段：正文段必须有真实的段间距，且字号来自「正文样式」的变量
+    const p = document.querySelector('.ne-msg-narrator .ne-msg-text');
+    if (!p) R.missing.push('叙事消息里没有 .ne-msg-text');
+    else {
+      const cs = getComputedStyle(p);
+      const size = parseFloat(cs.fontSize) || 0;
+      if (size < 11 || size > 22) R.missing.push('正文字号异常：' + cs.fontSize);
+      const lead = parseFloat(cs.lineHeight) / size;
+      if (!(lead > 1.3 && lead < 3)) R.missing.push('正文行距异常：' + cs.lineHeight);
+      R.notes.push('正文字号=' + cs.fontSize + ' 行距倍率=' + lead.toFixed(2));
+    }
+    const gapProbe = document.querySelectorAll('.ne-paras > .ne-msg-text, .ne-rich > .ne-msg-text');
+    R.notes.push('分段容器命中=' + gapProbe.length);
+  }
+
   // ④ 顶栏三个按钮：导入 / 设置
   const imp = [...document.querySelectorAll('.ne-icon-btn')].find(b => b.textContent.includes('导入'));
   if (imp) {
@@ -160,6 +200,32 @@ async function run() {
     for (const label of ['推进方式', '事件驱动', '自由对话', '群聊', '这一轮谁开口', '点名谁谁答', '谁可以不开口', '你（玩家）的名字', '你（玩家）的设定', '设定放在哪', '以什么身份发', '音效', '背景音乐', '音量']) {
       if (!modalText.includes(label)) R.missing.push('设置面板缺「' + label + '」');
     }
+    /* 正文样式分组（2026-09-19）：五个控件必须在场。
+       「玩法」要求**默认折叠** —— 量的是它有没有 is-open，不是它存不存在。 */
+    for (const label of ['正文样式']) {
+      if (!modalText.includes(label)) R.missing.push('设置面板缺「' + label + '」');
+    }
+    {
+      const readHead = [...document.querySelectorAll('.ne-fold-head')]
+        .find(h => h.textContent.includes('正文样式'));
+      if (!readHead) R.missing.push('找不到「正文样式」的折叠头');
+      else {
+        readHead.click();          // 展开，才量得到里面的控件
+        await wait(150);
+        const sec = readHead.closest('.ne-fold');
+        const txt = (sec || {}).innerText || '';
+        for (const label of ['字号', '行距', '段间距', '自动分段', '首行缩进']) {
+          if (!txt.includes(label)) R.missing.push('正文样式缺「' + label + '」');
+        }
+      }
+      const playHead = [...document.querySelectorAll('.ne-fold-head')]
+        .find(h => h.textContent.trim().startsWith('玩法'));
+      if (!playHead) R.missing.push('找不到「玩法」的折叠头');
+      else if (playHead.closest('.ne-fold').classList.contains('is-open')) {
+        R.missing.push('「玩法」分组默认是展开的（要求默认折叠）');
+      }
+    }
+
     // 边界机制是雨夜模式声明的机制，只有那个模式该出现这个开关
     if ('${mode}' === 'rainnight' && !modalText.includes('边界机制')) {
       R.missing.push('雨夜模式的设置里没有「边界机制」开关');

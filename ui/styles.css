@@ -151,6 +151,14 @@
     --spine-hi: #a08a68;
     --spine-ink: #f6ecd9;
     --page-edge: rgba(160, 140, 110, 0.42);
+
+    /* 正文样式（2026-09-19）：这几个值由 ui/app.js 的 applyReading()
+       按「设置 → 正文样式」重新套到 documentElement.style 上（内联优先），
+       这里只是默认值 —— 没有设置过时，读起来与改动前一致。 */
+    --reading-size: 14.5px;
+    --reading-leading: 1.95;
+    --reading-gap: 15px;
+    --reading-indent: 0em;
   }
 }
 
@@ -595,11 +603,25 @@
 
   .ne-msg-text {
     margin: 0;
-    font-size: clamp(14.5px, 0.85vw + 12px, 16px);
-    line-height: 2.02;
+    /* 字号 / 行距 / 缩进走「正文样式」设置
+       （ui/app.js 的 applyReading() 把这几个变量套在 :root 上）。
+       这里给默认值兜底 —— 变量没设时，行为与改动前一致。 */
+    font-size: var(--reading-size, clamp(14.5px, 0.85vw + 12px, 16px));
+    line-height: var(--reading-leading, 2.02);
+    text-indent: var(--reading-indent, 0em);
     color: var(--prose);
     text-wrap: pretty;
     text-shadow: var(--halo);
+  }
+
+  /* 段间距：原来段与段是贴着的，整屏读下来像一堵墙。
+     自动分段（ui/app.js 的 autoParagraphs）会把一坨正文切成多段，
+     这里负责让它们之间有呼吸。 */
+  .ne-paras > .ne-msg-text + .ne-msg-text,
+  .ne-rich > .ne-msg-text + .ne-msg-text,
+  .ne-rich > .ne-msg-text + .ne-card,
+  .ne-rich > .ne-card + .ne-msg-text {
+    margin-top: var(--reading-gap, 15px);
   }
 
   .ne-msg-narrator .ne-msg-text { color: var(--prose); }
@@ -3585,7 +3607,8 @@ body.mode-rainnight .ne-card-thought {
 /* ── 沉浸感 (a)：正文呼吸感 ──
    面板之外，正文本身也要有留白与节奏，不然整屏读起来像运行日志。 */
 body.mode-rainnight .ne-msg-text {
-  line-height: 1.95;
+  /* 用变量而不是写死 1.95 —— 否则「正文样式」里调了行距，雨夜模式纹丝不动 */
+  line-height: var(--reading-leading, 1.95);
   letter-spacing: 0.012em;
 }
 body.mode-rainnight .ne-msg + .ne-msg { margin-top: 14px; }
@@ -4031,4 +4054,30 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
   font-style: italic;
   color: var(--ink-3);
   opacity: 0.85;
+}
+
+/* ── 消息折叠（2026-09-19） ──
+   收起时只留 .ne-msg-head 一行（事件标题 + 第 N 天 · 时段）。
+   按钮挂在消息头里，margin-left:auto 推到最右侧。 */
+.ne-msg-fold {
+  margin-left: auto;
+  flex: none;
+  padding: 0 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.ne-msg-fold:hover { color: var(--ink); background: var(--paper-hi); }
+.ne-msg-fold:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+.ne-msg.is-collapsed > *:not(.ne-msg-head) { display: none; }
+.ne-msg.is-collapsed .ne-msg-head { margin-bottom: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ne-msg-fold { transition: none; }
 }

@@ -24,6 +24,7 @@ import {
   renegotiateEffects, currentTurn,
 } from '../src/boundary.js';
 import { buildNarrationMessages } from '../src/narrator.js';
+import { callResource, resourceBoard } from '../src/resources.js';
 
 /* 与 ui/app.js 完全一致的两行装配 —— 这正是当初断掉的地方 */
 const world = () => createRainWorld(createWorld);
@@ -306,6 +307,51 @@ test('§9.4 禁止矩阵与 §24.1 人设真的进了提示词', () => {
   assert.ok(user.includes('经济帮助 ≠ 亲密同意'), '禁止矩阵内容缺失');
   assert.ok(user.includes('【角色人设'), '角色人设没进提示词');
   assert.ok(user.includes('林晚晴'), '人设里没有林晚晴');
+});
+
+/* ── §18 资源调用系统 ── */
+
+test('§18：五个资源都在，且初始状态可调用', () => {
+  const w = world();
+  const board = resourceBoard(initialState(), w);
+  assert.equal(board.length, 5, `资源数 ${board.length}`);
+  for (const b of board) {
+    assert.ok(b.available, `${b.name} 初始就不可调用：${b.reason}`);
+  }
+  // 文档明确「神秘势力 · 未明」，没有可判定代价，不该被编成一个资源
+  assert.ok(!board.some(b => b.name.includes('神秘')), '「神秘势力」不该落成可调用资源');
+});
+
+test('§18：调用会推进调查阶段、记账、并进入冷却', () => {
+  const w = world();
+  let s = initialState();
+  const before = { stage: s.flags.case_stage ?? 0, expense: s.ledger.expense ?? 0 };
+
+  const call = callResource(s, w, 'lawyer');
+  assert.ok(call.ok, `律师不可调用：${call.reason}`);
+  s = applyEffects(s, call.effects).state;
+
+  assert.equal(s.flags.case_stage, before.stage + 1, '调用没有推进调查阶段');
+  assert.ok(s.ledger.expense > before.expense, '调用没有记账');
+  assert.equal(s.flags.res_lawyer_calls, 1, '调用次数没记');
+
+  // 冷却：同一天再调用应当被拒
+  const again = callResource(s, w, 'lawyer');
+  assert.equal(again.ok, false, '同一天重复调用应被冷却挡住');
+  assert.match(again.reason, /等/, `冷却理由不对：${again.reason}`);
+});
+
+test('§18：资源调用不产生任何同意/路线效果', () => {
+  const w = world();
+  const s = initialState();
+  for (const b of resourceBoard(s, w)) {
+    const r = callResource(s, w, b.id);
+    if (!r.ok) continue;
+    for (const e of r.effects) {
+      assert.ok(!/^(consent|routes)/.test(e.path),
+        `资源 ${b.id} 动了 ${e.path} —— 文档写明「资源不自动等于亲密同意」`);
+    }
+  }
 });
 
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {

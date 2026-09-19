@@ -43,6 +43,7 @@ const MODULES = [
   'src/freechat.js',
   'src/card.js',
   'src/scenePanel.js',
+  'src/resources.js',
   'src/director.js',
   'src/swipe.js',
   'src/boy.js',

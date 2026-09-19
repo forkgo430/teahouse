@@ -151,6 +151,41 @@ async function run() {
     const gapProbe = document.querySelectorAll('.ne-paras > .ne-msg-text, .ne-rich > .ne-msg-text');
     R.notes.push('分段容器命中=' + gapProbe.length);
 
+    /* §18 可调用资源：必须真的能点、且点完真的进冷却。
+       「有按钮」不算数 —— 量的是点下去之后按钮变灰 + 引擎给出反馈。 */
+    if ('${mode}' === 'rainnight') {
+      const resBtns = [...document.querySelectorAll('.ne-res-btn')];
+      if (resBtns.length === 0) R.missing.push('左抽屉没有 .ne-res-btn（资源调用没渲染）');
+      else {
+        R.notes.push('可调用资源=' + resBtns.length);
+        const target = resBtns.find(b => !b.disabled);
+        if (!target) R.missing.push('所有资源一开始就不可用');
+        else {
+          const msgBefore = document.querySelectorAll('.ne-msg').length;
+          const name = target.textContent.trim();
+          target.click();
+          await wait(400);
+          /* ⚠ 点完 render() 会重建抽屉与消息流，target 已经是离线的旧节点 ——
+             必须重新查，不能在旧树上找。这个假失败刚踩过一次。 */
+          const fresh = [...document.querySelectorAll('.ne-res')]
+            .find(r => (r.querySelector('.ne-res-btn') || {}).textContent.trim() === name);
+          if (!fresh) R.missing.push('调用资源后资源行整行消失了：' + name);
+          else if (!fresh.querySelector('.ne-res-day')) {
+            R.missing.push('调用资源后没出现「上次：第 N 天」的记录');
+          } else if (!fresh.querySelector('.ne-res-btn').disabled) {
+            R.missing.push('调用资源后按钮没有进入冷却（仍可点）');
+          }
+          const sysN = document.querySelectorAll('.ne-msg-system').length;
+          const allN = document.querySelectorAll('.ne-msg').length;
+          R.notes.push('消息 ' + msgBefore + '->' + allN + ' | system节点=' + sysN
+            + ' | 末节点=' + ((document.querySelector('#stream') || document.body).lastElementChild || {}).className);
+          if (allN <= msgBefore && sysN === 0) {
+            R.missing.push('调用资源没有任何反馈消息');
+          }
+        }
+      }
+    }
+
     /* 场景面板也必须能折：它原来是个裸 div、没有 .ne-msg-head，
        attachMsgFold 一进门就 return —— 整块面板折不了（用户报的就是这个）。 */
     if ('${mode}' === 'rainnight') {

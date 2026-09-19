@@ -47,6 +47,7 @@ import {
 } from '../src/card.js';
 import { applyDisplayOutbound, normalizeRule, SHIPPED_RULES } from '../src/regex.js';
 import { scenePanelMarkup } from '../src/scenePanel.js';
+import { callResource, resourceBoard } from '../src/resources.js';
 import { createBoy, normalizeBoyConfig, DEFAULT_BOY, WRITABLE, BOY_EVENTS } from '../src/boy.js';
 import { buildBoyDocument } from '../src/boyFrame.js';
 
@@ -1630,6 +1631,46 @@ function startMain(root, opts = {}) {
     return sec;
   }
 
+  /* ── §18 可调用资源 ──
+     真的能点，点了立刻改状态（推进调查阶段 / 记账 / 进冷却）。
+     可用性一律由引擎算（src/resources.js），这里只转述引擎的裁决 ——
+     摆出来却点不动，比不给更糟。 */
+  function resourceSection() {
+    const sec = el('section', 'ne-sec');
+    sec.appendChild(el('h3', 'ne-sec-title', '可调用资源'));
+    const st = store.getState();
+
+    for (const r of resourceBoard(st, world)) {
+      const row = el('div', 'ne-res');
+      const btn = el('button', `ne-btn ne-res-btn${r.available ? '' : ' is-locked'}`, r.name);
+      btn.type = 'button';
+      btn.dataset.sfx = 'toggle';
+      btn.disabled = !r.available;
+      const hints = [...r.uses];
+      if (r.cost > 0) hints.push(`花费 ${r.cost}`);
+      btn.title = r.available ? hints.join(' / ') : (r.reason ?? '');
+      btn.addEventListener('click', () => {
+        const c = callResource(store.getState(), world, r.id);
+        if (!c.ok) { appendSystem(`${r.name}：${c.reason}`, 'warn'); return; }
+        store.dispatch(c.effects);
+        /* ⚠ 顺序：先 render() 再 appendSystem。
+           render() 里会 rebuildStream()（stream.innerHTML = ''），
+           反过来写的话，刚追加的反馈消息会被自己抹掉 —— 点了跟没点一样。
+           registerConsent 就是这么写的，这里照抄。 */
+        render();
+        const bits = [c.def.uses?.[0] ?? '已调用'];
+        if (c.def.expense) bits.push(`支出 ${c.def.expense}`);
+        if (c.def.stageGain) bits.push(`调查进度 +${c.def.stageGain}`);
+        appendSystem(`调用「${r.name}」：${bits.join('，')}`, 'good');
+      });
+      row.appendChild(btn);
+      if (!r.available) row.appendChild(el('span', 'ne-res-why', r.reason ?? ''));
+      if (r.lastDay !== null) row.appendChild(el('span', 'ne-res-day', `上次：第 ${r.lastDay} 天`));
+      sec.appendChild(row);
+    }
+    return sec;
+  }
+
   function renderSidebar(view) {
     drawerLeft.innerHTML = '';
 
@@ -1648,6 +1689,9 @@ function startMain(root, opts = {}) {
 
     // 雨夜专属：当轮意愿与边界。样式一直在，渲染一直没写 —— 现在补上。
     if (mode === 'rainnight' && readBoundary()) drawerLeft.appendChild(consentSection(view));
+
+    // 雨夜专属：§18 资源调用（律师朋友 / 银行渠道 / 警方熟人 / 管家团队 / 政界新星）
+    if (world.resources?.length) drawerLeft.appendChild(resourceSection());
 
     const s3 = el('section', 'ne-sec');
     s3.appendChild(el('h3', 'ne-sec-title', `线索 · ${view.clues.length}`));

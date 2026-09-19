@@ -4081,3 +4081,16 @@ body.mode-rainnight .rx-entry:first-of-type { border-top-color: rgba(143, 180, 2
 @media (prefers-reduced-motion: reduce) {
   .ne-msg-fold { transition: none; }
 }
+
+/* §18 可调用资源（左抽屉）：一行一个，不可用就把理由写在旁边 */
+.ne-res {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  flex-wrap: wrap;
+}
+.ne-res-btn { flex: none; }
+.ne-res-btn.is-locked { opacity: 0.45; cursor: not-allowed; }
+.ne-res-why,
+.ne-res-day { font-size: 11px; color: var(--ink-3); }

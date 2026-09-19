@@ -6296,6 +6296,45 @@ export const RAINNIGHT_MODE = {
       ],
     },
 
+    /* §18 资源调用系统 / §10.1 资源与事件的绑定。
+       用途与代价按文档原文；冷却/金额是文档没给数的部分，由我定的量（可调）。
+       「神秘势力」文档写「未明 · 保留为终局变量」，没有可判定的代价，
+       所以**不落成可调用资源** —— 编一个代价就等于替文档定义它。 */
+    resources: [
+      {
+        id: 'lawyer', name: '律师朋友',
+        uses: ['法律建议', '合同审查', '债务谈判', '催收合法性'],
+        stageGain: 1, expense: 50000, cooldownDays: 3,
+        trust: { seeker: 4 },
+        note: '代价：人情 / 咨询费',
+      },
+      {
+        id: 'bank', name: '银行渠道',
+        uses: ['资金流水', '账户冻结', '贷款记录', '转账追踪'],
+        stageGain: 1, expense: 30000, cooldownDays: 5,
+        note: '代价：动用关系可能留痕',
+      },
+      {
+        id: 'police', name: '警方熟人',
+        uses: ['车牌查询', '监控', '保护', '立案'],
+        stageGain: 1, expense: 0, cooldownDays: 5,
+        note: '代价：立案后不可私下撤案',
+      },
+      {
+        id: 'butler', name: '世界管家团队',
+        uses: ['安保', '住宿', '背景调查', '交通', '后勤', '服务'],
+        stageGain: 0, expense: 80000, cooldownDays: 7,
+        safety: { kin: 6 },
+        note: '代价：月费（记入账本）',
+      },
+      {
+        id: 'political', name: '政界新星',
+        uses: ['政治', '权力'],
+        stageGain: 0, expense: 0, cooldownDays: 30,
+        note: '代价：政治绑定，风险不可逆',
+      },
+    ],
+
     /* §7 各条线各有自己的状态词表，和通用五态不同名。
        这里给「阶段数 → 词」的映射，面板照它显示。
        调查线是 0–6（比词表长），所以按阶段铺开，不硬压成五格。 */
@@ -6333,6 +6372,7 @@ export function createRainWorld(createWorldFn) {
        createWorld 会把 actors 拆成 actorLabels / statLabels，自己不留原数组，
        所以 `world.actors` 是空的 —— 人设段就会静默地永远不注入。 */
     actorDefs: w.actors,
+    resources: w.resources,
     guards: RAINNIGHT_MODE.guards(),
     /* 模式级字段也要交给世界 —— 它们本来就在 RAINNIGHT_MODE 顶层躺着，
        但从没被传下去：UI 判 `world.rainLevel > 0` 决定起不起 BGM，

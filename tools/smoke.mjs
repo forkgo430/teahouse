@@ -150,6 +150,28 @@ async function run() {
     }
     const gapProbe = document.querySelectorAll('.ne-paras > .ne-msg-text, .ne-rich > .ne-msg-text');
     R.notes.push('分段容器命中=' + gapProbe.length);
+
+    /* 场景面板也必须能折：它原来是个裸 div、没有 .ne-msg-head，
+       attachMsgFold 一进门就 return —— 整块面板折不了（用户报的就是这个）。 */
+    if ('${mode}' === 'rainnight') {
+      const panel = q('.ne-scene-panel');
+      if (!panel) R.missing.push('没有 .ne-scene-panel');
+      else {
+        const pb = panel.querySelector('.ne-msg-fold');
+        if (!pb) R.missing.push('场景面板没有折叠键（面板折不了）');
+        else {
+          pb.click();
+          await wait(120);
+          if (!panel.classList.contains('is-collapsed')) R.missing.push('场景面板点了折叠没反应');
+          const body = [...panel.children].find(c => !c.classList.contains('ne-msg-head'));
+          if (body && getComputedStyle(body).display !== 'none') {
+            R.missing.push('场景面板折叠后内容仍可见');
+          }
+          pb.click();
+          await wait(120);
+        }
+      }
+    }
   }
 
   // ④ 顶栏三个按钮：导入 / 设置
@@ -206,23 +228,29 @@ async function run() {
       if (!modalText.includes(label)) R.missing.push('设置面板缺「' + label + '」');
     }
     {
+      /* ⚠ 顺序要紧：**先量默认态**，再去展开别组看控件。
+         反过来的话，探针自己把组点开了，再断言"默认折叠"必然失败 ——
+         这个假失败刚踩过一次。 */
+      const allFolds = [...document.querySelectorAll('.ne-fold')];
+      R.notes.push('设置分组数=' + allFolds.length);
+      const opened = allFolds
+        .filter(s => s.classList.contains('is-open'))
+        .map(s => (s.querySelector('.ne-fold-title') || {}).textContent || '?');
+      if (opened.length > 0) {
+        R.missing.push('设置分组默认展开的有：' + opened.join(' / ') + '（要求全部默认折叠）');
+      }
+
       const readHead = [...document.querySelectorAll('.ne-fold-head')]
         .find(h => h.textContent.includes('正文样式'));
       if (!readHead) R.missing.push('找不到「正文样式」的折叠头');
       else {
-        readHead.click();          // 展开，才量得到里面的控件
+        readHead.click();          // 现在才展开，量里面的控件
         await wait(150);
         const sec = readHead.closest('.ne-fold');
         const txt = (sec || {}).innerText || '';
         for (const label of ['字号', '行距', '段间距', '自动分段', '首行缩进']) {
           if (!txt.includes(label)) R.missing.push('正文样式缺「' + label + '」');
         }
-      }
-      const playHead = [...document.querySelectorAll('.ne-fold-head')]
-        .find(h => h.textContent.trim().startsWith('玩法'));
-      if (!playHead) R.missing.push('找不到「玩法」的折叠头');
-      else if (playHead.closest('.ne-fold').classList.contains('is-open')) {
-        R.missing.push('「玩法」分组默认是展开的（要求默认折叠）');
       }
     }
 

@@ -1391,21 +1391,22 @@ function startMain(root, opts = {}) {
          需要按组件渲染。茶馆开场是纯文本、不含标记 → textBox 内部走
          `!hasCardMarkup` 分支，产出的仍是单个 <p class="ne-msg-text">，行为与改前一致。 */
       intro.appendChild(textBox(world.opening));
+      // 开场也要能折叠 —— 这里以前是 `return`，所以开场那条**永远没有折叠键**。
+      attachMsgFold(intro, 'opening');
       stream.appendChild(intro);
-      return;
+    } else {
+      history.forEach((record, i) => {
+        if (record.said) {
+          const pn = playerNode(record.said);
+          attachMsgFold(pn, `p${i}`);
+          stream.appendChild(pn);
+        }
+        const node = narratorNode(record, i);
+        attachSpot(node);
+        attachMsgFold(node, `n${record.turn ?? i}`);
+        stream.appendChild(node);
+      });
     }
-
-    history.forEach((record, i) => {
-      if (record.said) {
-        const pn = playerNode(record.said);
-        attachMsgFold(pn, `p${i}`);
-        stream.appendChild(pn);
-      }
-      const node = narratorNode(record, i);
-      attachSpot(node);
-      attachMsgFold(node, `n${record.turn ?? i}`);
-      stream.appendChild(node);
-    });
 
     /* 雨夜模式：末尾挂一张「现在什么状态」的面板。
        它由 state **现算**（src/scenePanel.js），不是写死的文案 ——
@@ -1413,7 +1414,13 @@ function startMain(root, opts = {}) {
        「正文说她在哭、卡上还写着平静」那种自相矛盾。
        只出有 `profile` 的角色（雨夜里就是林晚晴与周若宁），
        避免把「你」「催收方」这种没有身体档案的角色也画成卡。 */
-    if (world.rainLevel > 0) stream.appendChild(scenePanelNode());
+    if (world.rainLevel > 0) {
+      const panel = scenePanelNode();
+      // 面板也要能折叠 —— 它原来是裸 div，没有 .ne-msg-head，
+      // 于是 attachMsgFold 一进门就 return，整块面板折不了。
+      attachMsgFold(panel, 'panel');
+      stream.appendChild(panel);
+    }
   }
 
   function scenePanelNode() {
@@ -1422,6 +1429,12 @@ function startMain(root, opts = {}) {
       .filter(a => String(a.profile ?? '').trim() !== '')
       .map(a => a.id);
     const box = el('div', 'ne-msg ne-msg-narrator ne-scene-panel');
+    // 要有消息头，折叠键才有地方挂（attachMsgFold 认的是 .ne-msg-head）
+    const head = el('div', 'ne-msg-head');
+    head.appendChild(el('span', 'ne-msg-kind', '当前状态'));
+    const slot = world.slotLabels?.[s.clock.slot] ?? s.clock.slot ?? '';
+    head.appendChild(el('span', 'ne-msg-meta', `第 ${s.clock.day} 天 · ${slot}`));
+    box.appendChild(head);
     box.appendChild(textBox(scenePanelMarkup(s, world, { actorIds })));
     return box;
   }
@@ -2499,7 +2512,9 @@ function startMain(root, opts = {}) {
     card.appendChild(rxFold.sec);
 
     /* 外观：玻璃旋钮（Aqua 同款，实时生效）—— 常用，默认摊开 */
-    const appFold = foldSection('外观 · 玻璃', { key: 'glass', open: true });
+    // 外观也默认折叠（用户要求：设置面板里所有分组统一收起，
+    // 想调哪一组再点开，省得三十多行控件一次铺满）
+    const appFold = foldSection('外观 · 玻璃', { key: 'glass' });
     const appearance = appFold.body;
     const glassCfg = readGlassCfg();
     const knobs = [

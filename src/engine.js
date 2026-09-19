@@ -153,7 +153,18 @@ export function pickEvent(state, world) {
 
   if (candidates.length === 0) return null;
 
-  return candidates.slice().sort((a, b) => {
+  /* §13.3 规则3「三连停摆补偿」：连续 3 轮都只推进「小」，
+     第 4 轮优先挑一个**有大分支**的事件，把剧情推起来。
+     只收窄候选池，**不放出**本来不该出的事件 —— 补偿不能越过 when/require。 */
+  let pool = candidates;
+  const tail = (state.history ?? []).slice(-3);
+  if (tail.length === 3 && tail.every(h => h.magnitude === '小')) {
+    const big = candidates.filter(ev =>
+      (ev.branches ?? []).some(b => deriveMagnitude(b.effects ?? []) === '大'));
+    if (big.length > 0) pool = big;
+  }
+
+  return pool.slice().sort((a, b) => {
     const pa = a.priority ?? 0;
     const pb = b.priority ?? 0;
     if (pb !== pa) return pb - pa;
@@ -276,6 +287,59 @@ export function evaluateGuards(state, event, branch, world) {
  * @param {object} event
  * @param {object} [world] 给了就把 guard 也算进去（缺省只算 cond，向后兼容）
  */
+/* ------------------------------------------------------------------ *
+ * 选项的「线名 / 推进幅度」（2026-09-19）
+ *
+ * 设定文档 §13.2 要求选项写成 `【线名 · 推进幅度】…`。
+ * 这两项**不靠手写**：从分支的 effects 推导 —— 239 个分支手写必错，
+ * 而且手写的分类会和它实际改的东西脱钩（显示了「关系线」却只动了 survey 的 flag）。
+ * 推导保证「显示的分类」≡「实际改了什么」。
+ * 内容层若确有特殊归类，可用 branch.line / branch.magnitude 显式覆盖。
+ * ------------------------------------------------------------------ */
+
+const LINE_RULES = [
+  [/^(clues\b)|^flags\.(case_stage|four_names|dual_track|police_route|insider_|plate_|both_named|focus_main|steadied|believed_him|doubted_him|played_along|found_him|truth_|disclosure_|stopped_investigating|gave_up)|^actors\.collector\./, '调查线'],
+  [/^flags\.(career_stage|zheng_|board_|studio_|jingtian_|shenzhiyi_|line_shenzhiyi|suwan_|took_initiative|held_ground|edge_out|public_relation|hidden_relation|banquet_|group_line|political_)/, '事业线'],
+  [/^actors\.kin\.|^flags\.(path_kin|kin_|photo_|gaokao_|tutor_|senior_|kids_friends|pressured_grades|praised_)/, '家庭线'],
+  [/^actors\.seeker\.|^flags\.(path_seeker|seeker_|her_lawyer|her_errand|own_route|arranged_all|asked_her|terms_set|took_them_in|one_night|reopened_door|declined\b|said_why|thanked_night|respected_distance|heard_her_out|supported_her_work|opposed_her_job|seeker_independent|defused_leverage|stopped_at_line|leverage_|first_time_seeker)/, '关系线'],
+  [/^ledger\./, '分线-经济'],
+];
+
+/** 从 effects 推「线名」；推不出返回 null（UI 就不加前缀，不硬编一个假的）。 */
+export function deriveLine(effects = []) {
+  const hits = new Map();
+  for (const e of effects) {
+    for (const [re, name] of LINE_RULES) {
+      if (re.test(e.path ?? '')) {
+        hits.set(name, (hits.get(name) ?? 0) + 1);
+        break;
+      }
+    }
+  }
+  if (hits.size === 0) return null;
+  return [...hits.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+/**
+ * 从 effects 推「推进幅度」。
+ * 权重：flags / clues 各算 2（它们改的是剧情开关），数值加减各算 1。
+ * 阈值取 4 / 8 —— 校准自现网分支：多数 2–3 项的加值分支落在「小/中」，
+ * 同时改 flag + 数值 + 线索的落「大」。
+ */
+export function deriveMagnitude(effects = []) {
+  let w = 0;
+  for (const e of effects) {
+    if (!e) continue;
+    const p = e.path ?? '';
+    if (p.startsWith('flags.') || p.startsWith('clues')) w += 2;
+    else if (p.startsWith('where')) continue;
+    else w += 1;
+  }
+  if (w >= 8) return '大';
+  if (w >= 4) return '中';
+  return '小';
+}
+
 export function buildOptions(state, event, world) {
   if (!event) return [];
 
@@ -288,6 +352,9 @@ export function buildOptions(state, event, world) {
     opts.push({
       key: b.key,
       label: b.label ?? b.key,
+      // §13.2 的「线名 · 幅度」：内容层显式给了就用，否则从 effects 推
+      line: b.line ?? deriveLine(b.effects ?? []),
+      magnitude: b.magnitude ?? deriveMagnitude(b.effects ?? []),
       kind: (b.cond ?? null) === null ? 'default' : 'branch',
       available: ok && gate.ok,
       reason: failed ? failed.text : (gate.ok ? null : gate.reason),
@@ -399,6 +466,10 @@ function recordHistory(state, event, branch, changes, intent) {
     turn: (state.history ?? []).length + 1,
     eventId: event.id,
     branchKey: branch.key,
+    /* §13.3 规则3「三连停摆补偿」要读这个：本轮推进的「线」与「幅度」。
+       从 effects 推导，不由内容手写 —— 手写的幅度会和实际改动脱钩。 */
+    line: deriveLine(branch.effects ?? []),
+    magnitude: deriveMagnitude(branch.effects ?? []),
     // 最终展示给玩家的正文。先填预写文本；接模型时由界面层覆盖成模型写的那段，
     // 这样读档、回退之后重建正文用的仍是当时真正看到的内容。
     text: branch.text ?? '',

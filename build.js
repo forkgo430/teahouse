@@ -46,6 +46,7 @@ const MODULES = [
   'src/resources.js',
   'src/intimacy.js',
   'src/cards.js',
+  'src/trigger.js',
   'src/director.js',
   'src/swipe.js',
   'src/boy.js',

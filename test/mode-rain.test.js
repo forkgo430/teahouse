@@ -27,6 +27,7 @@ import { buildNarrationMessages } from '../src/narrator.js';
 import { callResource, resourceBoard } from '../src/resources.js';
 import { recordIntimacyEffects, intimacyBoard, pauseReason, intimacyLine } from '../src/intimacy.js';
 import { useCard, cardBoard, cardsLeft } from '../src/cards.js';
+import { matchTriggers, triggerNote } from '../src/trigger.js';
 
 /* 与 ui/app.js 完全一致的两行装配 —— 这正是当初断掉的地方 */
 const world = () => createRainWorld(createWorld);
@@ -449,6 +450,33 @@ test('§5.1：卡牌不产生同意或边界效果（文档明写与成人内容
         `卡 ${c.id} 动了 ${e.path} —— 文档写明卡牌不构成任何同意豁免`);
     }
   }
+});
+
+
+/* ── §16 触发表 ── */
+
+test('§16：关键词能命中，且只提示「还没发生」的事件（防剧透）', () => {
+  const w = world();
+  assert.equal(w.triggers.length, 38, `触发表 ${w.triggers.length} 条`);
+
+  const hits = matchTriggers('那辆 842 的面包车还在校门口', w.triggers);
+  assert.ok(hits.length >= 2, `只命中 ${hits.length} 个关键词`);
+
+  const s = initialState();
+  const note = triggerNote(hits, s, w);
+  assert.match(note, /842/, '提示里没有命中的关键词');
+  assert.match(note, /不要提前写/, '提示里没有「不要提前写」这句 —— 少了它就会剧透');
+
+  // 已经发生过的事件不该再出现在「相关未发生」里
+  const done = { ...s, history: [{ turn: 1, eventId: 'R04' }] };
+  assert.ok(!triggerNote(hits, done, w).includes('相关未发生：R04'),
+    'R04 已经发生过了，还提示成「相关未发生」');
+});
+
+test('§16：没命中关键词时不注入任何东西', () => {
+  const w = world();
+  assert.deepEqual(matchTriggers('今天天气不错', w.triggers), []);
+  assert.equal(triggerNote([], initialState(), w), '');
 });
 
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {

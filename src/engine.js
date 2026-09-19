@@ -97,6 +97,7 @@ export function createWorld(def = {}) {
     playerCard: def.playerCard ?? null,     // §5 玩家变量卡
     narrativeRules: def.narrativeRules ?? null, // §12.1 叙事规则
     defaultStyle: def.defaultStyle ?? null,     // 模式级文风默认（雨夜：混合人称）
+    triggers: def.triggers ?? null,             // §16 触发表
 
     index: buildIndex(events),
   };

@@ -27,6 +27,7 @@ import {
   resolveValue,
 } from './narrator.js';
 import { makeStatusCard } from './card.js';
+import { matchTriggers, triggerNote } from './trigger.js';
 
 /**
  * 叙述类请求（narrate / freeReply）的 token 上限，跟随文风档位。
@@ -346,6 +347,8 @@ export function createDirector({ world, client = null, onDelta = null, options =
           relations: world.relations ?? null,
           playerCard: world.playerCard ?? null,
           narrativeRules: world.narrativeRules ?? null,
+          // §16 触发表：只在玩家原话确实命中关键词时才注入（没命中就是空串）
+          triggerHit: triggerNote(matchTriggers(ctx.inbound, world.triggers), state, world),
           // §24.1 角色人设：只发有 persona 的角色（雨夜里就是林晚晴与周若宁）
           personas: (world.actorDefs ?? []).filter(a => a.persona).map(a => ({
             name: a.name,

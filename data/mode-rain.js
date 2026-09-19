@@ -6296,6 +6296,53 @@ export const RAINNIGHT_MODE = {
       ],
     },
 
+    /* §16 触发表（关键词 → 线索 / 事件 / 系统 的唯一映射）。
+       doc 用的是「事件1–58」的编号，这里已按 crosswalk 解析成引擎 id。
+       ⚠ 有 6 条 doc 引用解析不出来（事件28 / 事件30 在本项目的映射里不存在、
+         「事件·催收上门」是保底事件的描述而非编号），**已弃掉并在提交里注明** ——
+         宁可少一条，也不能编一个对不上的 id 进去。
+       用途：玩家原话命中关键词时，把「相关但还没发生」的事件提示给模型（不剧透、不提前写）。 */
+    triggers: [
+      { keyword: "842", events: ['R04', 'E20', 'E33'] },
+      { keyword: "面包车", events: ['R04', 'E31'] },
+      { keyword: "高利贷", events: ['R03', 'E22'], stages: [1] },
+      { keyword: "五百万", events: ['R03'], stages: [1] },
+      { keyword: "债权人", events: ['E22'], stages: [3] },
+      { keyword: "空壳公司", events: ['R13', 'E36'], stages: [4] },
+      { keyword: "律师", events: ['R08', 'R17', 'R23'] },
+      { keyword: "银行", events: ['R12', 'E35', 'E36'] },
+      { keyword: "警方", events: ['R12', 'R16', 'R22'] },
+      { keyword: "管家", events: ['R09', 'R13', 'E20', 'E21', 'E22', 'R17', 'E33', 'E36'] },
+      { keyword: "学校", events: ['R08', 'E11', 'E17', 'E31', 'E43', 'E49', 'E51'] },
+      { keyword: "便条", events: ['R03'], clues: ['D0'] },
+      { keyword: "抱歉", events: ['R03'], clues: ['D2'] },
+      { keyword: "失踪", events: ['R03', 'R17'], stages: [2] },
+      { keyword: "债务", events: ['R03', 'R12', 'E35', 'R23'] },
+      { keyword: "表", events: ['E47'] },
+      { keyword: "花", events: ['E18', 'E46'] },
+      { keyword: "睡衣", events: ['E27', 'E54'] },
+      { keyword: "按摩", events: ['E54'] },
+      { keyword: "主卧", events: ['E27', 'E29', 'E54', 'E55', 'R25', 'R26'] },
+      { keyword: "次卧", events: ['R11', 'E25', 'R19', 'R23', 'E45', 'E47', 'E49', 'E56'] },
+      { keyword: "内裤", events: ['E55', 'E56'] },
+      { keyword: "秘书", events: ['E46', 'E47'] },
+      { keyword: "北大", events: ['R05', 'E17'] },
+      { keyword: "吉音", events: ['E36'] },
+      { keyword: "演员", events: ['E36'] },
+      { keyword: "复旦", events: ['E50'] },
+      { keyword: "雨夜", events: ['R01', 'R02'] },
+      { keyword: "投奔", events: ['R01'] },
+      { keyword: "换衣", events: ['R02'] },
+      { keyword: "讲述", events: ['R03'] },
+      { keyword: "催收上门",  },
+      { keyword: "学校跟踪", events: ['E11', 'E31'] },
+      { keyword: "威胁短信", events: ['R11'] },
+      { keyword: "浴室", events: ['R02'] },
+      { keyword: "雷雨", events: ['R01', 'R02'] },
+      { keyword: "酒店", events: ['E35'] },
+      { keyword: "办公室", events: ['E47', 'E48'] },
+    ],
+
     /* §12.1 叙事规则（原文照录）。「第二人称/第三人称混合」「现在时」「文学化」
        这几条决定了正文长什么样，不注入的话模型只会写成通用网文。 */
     narrativeRules: [
@@ -6450,6 +6497,7 @@ export function createRainWorld(createWorldFn) {
     cards: w.cards,
     playerCard: w.playerCard,
     narrativeRules: w.narrativeRules,
+    triggers: w.triggers,
     defaultStyle: { person: 'mixed' },
     guards: RAINNIGHT_MODE.guards(),
     /* 模式级字段也要交给世界 —— 它们本来就在 RAINNIGHT_MODE 顶层躺着，

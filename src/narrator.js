@@ -169,7 +169,7 @@ export function buildChoiceMessages({ brief, situation, event, options, playerIn
  * @param {string} [ctx.lore] 世界书扫出来的相关设定
  * @param {object} [ctx.style] 玩家的文风配置（见 src/style.js）；不传就是默认
  */
-export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null, playerCard = null, narrativeRules = null }) {
+export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null, playerCard = null, narrativeRules = null, triggerHit = '' }) {
   const parts = [];
   if (brief) parts.push(`【背景】\n${brief}`);
   parts.push(`【当前局面】\n${situation}`);
@@ -183,6 +183,10 @@ export function buildNarrationMessages({ brief, situation, event, branch, report
     }
     if (lines.length) parts.push(`【禁止（违反即作废这一段）】\n${lines.join('\n')}`);
   }
+
+  /* §16 触发表命中：玩家原话提到了某个关键词时，只把这几个「相关但没发生」的
+     事件提示出来，并明确要求不要提前写 —— 防剧透，也防止模型自己编线索。 */
+  if (triggerHit) parts.push(`【触发表命中（§16）】\n${triggerHit}`);
 
   /* §12.1 叙事规则：人称/时态/语体/感官/心理……这些决定正文长什么样。 */
   if (Array.isArray(narrativeRules) && narrativeRules.length) {

@@ -41,11 +41,17 @@ export const LANG_OPTIONS = [
   { value: 'none', label: '不指定', text: '', inline: '' },
 ];
 
-/** 字数是单值选择，不是区间 —— 玩家要的是「这一轮长一点」，不是精确字数 */
+/** 字数是单值选择，不是区间 —— 玩家要的是「这一轮长一点」，不是精确字数。
+ *
+ *  2026-09-19 扩档：在原 short/normal/long/unlimited 基础上新增 longer（长叙）
+ *  与 segmented（分段）。旧档的 value 名保持不变，已发布的预设与存档里存的是这些
+ *  value，改 value 会断开旧配置。档位上限同步抬高（见 director 的 maxTokensForLength）。 */
 export const LENGTH_OPTIONS = [
-  { value: 'short', label: '精短', hint: '40~80 字', text: '篇幅控制在 40 到 80 字，只写最要紧的一两个动作。', inline: '40 到 80 字' },
-  { value: 'normal', label: '适中', hint: '80~150 字', text: '篇幅控制在 80 到 150 字。', inline: '80 到 150 字' },
-  { value: 'long', label: '舒展', hint: '200~350 字', text: '篇幅 200 到 350 字，可以铺开环境与心理描写。', inline: '200 到 350 字' },
+  { value: 'short', label: '精短', hint: '220~360 字', text: '篇幅控制在 220 到 360 字，只写最要紧的一两个动作与一句环境。', inline: '220 到 360 字' },
+  { value: 'normal', label: '适中', hint: '450~620 字', text: '篇幅控制在 450 到 620 字，动作、对白、环境各给到，别太铺张。', inline: '450 到 620 字' },
+  { value: 'long', label: '舒展', hint: '800~1000 字', text: '篇幅 800 到 1000 字，可以铺开环境、心理与对话。', inline: '800 到 1000 字' },
+  { value: 'longer', label: '长叙', hint: '1200~2400 字', text: '篇幅 1200 到 2400 字，允许大段铺陈环境、心理、对话与细节，可写长篇独白与多线交织。', inline: '1200 到 2400 字' },
+  { value: 'segmented', label: '分段', hint: '不限·逐事件写完', text: '不限制单段字数。若一轮内含多个事件，请逐个事件分段书写：把当前事件的剧情写完整、写完毕，再进入下一个事件，不要中途跳走或把多个事件揉成一段。', inline: '分事件写完' },
   { value: 'unlimited', label: '不限', hint: '不写字数', text: '', inline: '' },
 ];
 
@@ -170,7 +176,7 @@ const ALWAYS_CLAUSES = [
  * 已发布的预设、玩家脑子里对叙述者行为的预期，都不该因为这次重构而漂移。
  * 三项中任意一项被改过，就退回按选项拼句的写法。
  */
-const DEFAULT_LINE1 = '用第二人称「你」写，中文，80 到 150 字。';
+const DEFAULT_LINE1 = '用第二人称「你」写，中文，450 到 620 字。';
 
 /**
  * 把若干片段接成一句。

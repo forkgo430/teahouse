@@ -28,6 +28,28 @@ import {
 } from './narrator.js';
 import { makeStatusCard } from './card.js';
 
+/**
+ * 叙述类请求（narrate / freeReply）的 token 上限，跟随文风档位。
+ *
+ * 旧版把 maxTokens 写死成 600/700，按「中文字 ≈ 1.3~1.6 token」算，只能撑到
+ * 450 字上下 —— 一旦选「舒展 / 长叙 / 分段」就被天花板截断，且不报错，只写不长。
+ * 这是本项目最常踩的静默降级，所以上限不再写死，而是按档位给足余量。
+ *
+ * 字母档是「选择题」（resolveIntent / extractChoice），判个分支键而已，温度压到 0，
+ * 200 足够，不在此列。
+ */
+const LENGTH_MAX_TOKENS = {
+  short: 700,        // 220~360 字
+  normal: 1100,      // 450~620 字
+  long: 1700,        // 800~1000 字
+  longer: 4000,      // 1200~2400 字
+  segmented: 4000,   // 不限·逐事件写完
+  unlimited: 4000,   // 不限
+};
+function maxTokensForLength(length) {
+  return LENGTH_MAX_TOKENS[length] ?? 4000;
+}
+
 export function createDirector({ world, client = null, onDelta = null, options = {} } = {}) {
   const hasModel = () => Boolean(client?.ready?.());
 
@@ -269,11 +291,11 @@ export function createDirector({ world, client = null, onDelta = null, options =
         }
 
         const raw = (onDelta && stream)
-          ? await client.stream(messages, { temperature: 0.92, maxTokens: 700 }, (_delta, full) => {
+          ? await client.stream(messages, { temperature: 0.92, maxTokens: maxTokensForLength(settings.narrationStyle?.length) }, (_delta, full) => {
             const partial = cleanNarration(full);
             if (partial) onDelta(partial);
           })
-          : await client.complete(messages, { temperature: 0.92, maxTokens: 700 });
+          : await client.complete(messages, { temperature: 0.92, maxTokens: maxTokensForLength(settings.narrationStyle?.length) });
 
         const cleaned = cleanNarration(raw);
         const text = settings.outboundRules.length > 0
@@ -328,11 +350,11 @@ export function createDirector({ world, client = null, onDelta = null, options =
         }
 
         const raw = (onDelta && stream)
-          ? await client.stream(messages, { temperature: 0.9, maxTokens: 600 }, (_delta, full) => {
+          ? await client.stream(messages, { temperature: 0.9, maxTokens: maxTokensForLength(settings.narrationStyle?.length) }, (_delta, full) => {
             const partial = cleanNarration(full);
             if (partial) onDelta(partial);
           })
-          : await client.complete(messages, { temperature: 0.9, maxTokens: 600 });
+          : await client.complete(messages, { temperature: 0.9, maxTokens: maxTokensForLength(settings.narrationStyle?.length) });
 
         const cleaned = cleanNarration(raw);
         // 输出正则后处理（scope 'out' 的规则）

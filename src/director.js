@@ -341,6 +341,19 @@ export function createDirector({ world, client = null, onDelta = null, options =
           lore: [lore, ctx.contextNote].filter(Boolean).join('\n\n'),
           style: settings.narrationStyle,
           statusCard: statusCardFor(state, report),
+          // §9.4 禁止矩阵：模式声明的口径，原文照发
+          prohibitions: world.prohibitions ?? null,
+          // §24.1 角色人设：只发有 persona 的角色（雨夜里就是林晚晴与周若宁）
+          personas: (world.actorDefs ?? []).filter(a => a.persona).map(a => ({
+            name: a.name,
+            fields: [
+              ...(a.persona.core ?? []),
+              ...(a.persona.actions ?? []).map(x => `标志动作：${x}`),
+              ...(a.persona.toPlayer ?? []).map(x => `对玩家：${x}`),
+              ...(a.persona.stress ?? []).map(x => `压力反应：${x}`),
+              ...(a.persona.selfEsteem ?? []).map(x => `自尊反应：${x}`),
+            ],
+          })),
         });
 
         // 玩家自己的提示词栈（在预设系统提示之下、引擎规则之上）

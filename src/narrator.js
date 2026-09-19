@@ -169,10 +169,31 @@ export function buildChoiceMessages({ brief, situation, event, options, playerIn
  * @param {string} [ctx.lore] 世界书扫出来的相关设定
  * @param {object} [ctx.style] 玩家的文风配置（见 src/style.js）；不传就是默认
  */
-export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '' }) {
+export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null }) {
   const parts = [];
   if (brief) parts.push(`【背景】\n${brief}`);
   parts.push(`【当前局面】\n${situation}`);
+
+  /* 「禁止矩阵」（设定文档 §9.4，文档标注为唯一权威）。
+     分组原文照发，不在这里做取舍 —— 它是内容口径，不是引擎的裁量。 */
+  if (prohibitions && typeof prohibitions === 'object') {
+    const lines = [];
+    for (const [group, items] of Object.entries(prohibitions)) {
+      for (const it of items ?? []) lines.push(`· [${group}] ${it}`);
+    }
+    if (lines.length) parts.push(`【禁止（违反即作废这一段）】\n${lines.join('\n')}`);
+  }
+
+  /* §24.1 角色档案：性格核心 / 标志动作 / 对玩家态度 / 压力与自尊反应。
+     这是「人是什么样的人」的唯一权威（§4 只管「此刻什么状态」）。 */
+  if (Array.isArray(personas) && personas.length) {
+    const lines = [];
+    for (const p of personas) {
+      lines.push(`${p.name}：`);
+      for (const f of p.fields ?? []) lines.push(`  · ${f}`);
+    }
+    if (lines.length) parts.push(`【角色人设（§24.1，唯一权威）】\n${lines.join('\n')}`);
+  }
   if (lore) parts.push(`【相关设定】\n${lore}`);
   parts.push(`【本轮事件】${event.title}`);
   if (playerInput) parts.push(`【玩家的原话】${playerInput}`);

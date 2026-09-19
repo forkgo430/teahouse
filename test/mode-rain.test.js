@@ -23,6 +23,7 @@ import {
   canAdvance, consentEffects, CONSENT, withdrawEffects,
   renegotiateEffects, currentTurn,
 } from '../src/boundary.js';
+import { buildNarrationMessages } from '../src/narrator.js';
 
 /* 与 ui/app.js 完全一致的两行装配 —— 这正是当初断掉的地方 */
 const world = () => createRainWorld(createWorld);
@@ -208,6 +209,103 @@ test('§19.1.3：结局报告能解释「凭什么达成」与「还差什么」
   for (const it of report.ending.trace.reached) {
     assert.ok(it.note.length <= 60, `note 过长：${it.note.slice(0, 80)}`);
   }
+});
+
+/* §13.3 规则4/5：主线与次主线不可长期停滞（各 5 轮） */
+
+function mkLineWorld() {
+  const mk = (id, line, priority) => ({
+    id,
+    title: id,
+    when: { day: 1 },
+    priority,
+    branches: [{
+      key: 'A',
+      label: 'A',
+      cond: null,
+      text: '',
+      // 用一个能推出目标 line 的 effect：关系线走 seeker 的数值，调查线走 clues
+      effects: line === '关系线'
+        ? [{ path: 'actors.seeker.stats.trust', op: 'add', value: 3 }]
+        : [{ path: 'clues', op: 'push', value: 'C01' }],
+    }],
+  });
+  // rel 优先级低、inv 优先级高 —— 没停滞时必然选 inv
+  return createWorld({ events: [mk('inv', '调查线', 99), mk('rel', '关系线', 1)] });
+}
+
+function histOf(line, n) {
+  return Array.from({ length: n }, (_, i) => ({
+    turn: i + 1, eventId: 'x', branchKey: 'A', magnitude: '中', line,
+  }));
+}
+
+test('§13.3 规则4：主线连续 5 轮无进展 → 优先挑含关系线分支的事件', () => {
+  const w = mkLineWorld();
+  const base = createInitialState({});
+  const stalled = { ...base, history: histOf('调查线', 5) };
+
+  assert.equal(pickEvent(base, w).id, 'inv', '未停滞时应按优先级选 inv');
+  assert.equal(pickEvent(stalled, w).id, 'rel', '主线停滞 5 轮后应改选 rel');
+});
+
+test('§13.3 规则5：调查线连续 5 轮无进展 → 优先挑含调查线分支的事件', () => {
+  const w = mkLineWorld();
+  const base = createInitialState({});
+  const stalled = { ...base, history: histOf('关系线', 5) };
+
+  assert.equal(pickEvent(stalled, w).id, 'inv', '调查线停滞 5 轮后应改选 inv');
+});
+
+test('§13.3：规则3 优先于规则4（三连「小」更紧急）', () => {
+  const mk = (id, line, big, priority) => ({
+    id,
+    title: id,
+    when: { day: 1 },
+    priority,
+    branches: [{
+      key: 'A',
+      label: 'A',
+      cond: null,
+      text: '',
+      effects: big
+        ? [{ path: 'flags.a', op: 'set', value: true }, { path: 'flags.b', op: 'set', value: true },
+          { path: 'flags.c', op: 'set', value: true }, { path: 'flags.d', op: 'set', value: true }]
+        : [{ path: 'clues', op: 'push', value: 'C01' }],
+    }],
+  });
+  const w = createWorld({ events: [mk('bigRel', '关系线', true, 1), mk('inv', '调查线', false, 99)] });
+  const base = createInitialState({});
+  // 最近 3 轮都是「小」，同时最近 5 轮没有关系线 —— 两条规则都成立，必须走规则3
+  const h = { turn: 1, eventId: 'x', branchKey: 'A', magnitude: '小', line: '调查线' };
+  const stalled = { ...base, history: [h, { ...h, turn: 2 }, { ...h, turn: 3 }, { ...h, turn: 4 }, { ...h, turn: 5 }] };
+
+  assert.equal(pickEvent(stalled, w).id, 'bigRel', '规则3 成立时应压过规则4');
+});
+
+/* ── 提示词注入：§9.4 禁止矩阵 / §24.1 角色人设 ──
+   这两条曾经「写了但没进提示词」：createWorld 会把 actors 拆成 actorLabels，
+   自己不留原数组，所以 `world.actors` 是空的，人设段静默不注入。
+   这里从**真实提示词**里断言，而不是断言"数据里有这个字段"。 */
+
+test('§9.4 禁止矩阵与 §24.1 人设真的进了提示词', () => {
+  const w = world();
+  assert.ok(Array.isArray(w.actorDefs), 'world.actorDefs 缺失（createWorld 不会保留 actors）');
+  const per = w.actorDefs.filter(a => a.persona).map(a => ({
+    name: a.name, fields: [...(a.persona.core ?? [])],
+  }));
+  assert.ok(per.length >= 2, `带人设的角色只有 ${per.length} 个`);
+
+  const user = buildNarrationMessages({
+    brief: w.brief, situation: '局面', event: { title: 'T' },
+    branch: { label: 'L' }, report: { changes: [] }, world: w,
+    prohibitions: w.prohibitions, personas: per,
+  })[1].content;
+
+  assert.ok(user.includes('【禁止'), '禁止矩阵没进提示词');
+  assert.ok(user.includes('经济帮助 ≠ 亲密同意'), '禁止矩阵内容缺失');
+  assert.ok(user.includes('【角色人设'), '角色人设没进提示词');
+  assert.ok(user.includes('林晚晴'), '人设里没有林晚晴');
 });
 
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {

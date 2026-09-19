@@ -82,6 +82,16 @@ export function createWorld(def = {}) {
     // 模式级：雨的浓度（0 = 不下雨）与这个模式声明的机制
     rainLevel: Number(def.rainLevel) || 0,
     rules: def.rules ?? null,
+
+    /* ⚠ 这里是**白名单**，没列进来的字段会被静默丢掉。
+       下面三个都踩过：写进了模式定义、传进了 createRainWorld，
+       但在这里被吃掉 —— 于是「路线词表不显示」「禁止矩阵不进提示词」
+       「角色人设永远注入不到」三件事同时发生，而且全都不报错。
+       往模式里加顶层字段时，**必须同时在这里登记**。 */
+    lines: def.lines ?? null,               // §7 各线状态词表
+    prohibitions: def.prohibitions ?? null, // §9.4 禁止矩阵
+    actorDefs: def.actorDefs ?? null,       // 角色定义（含 §24.1 人设）
+
     index: buildIndex(events),
   };
   return world;
@@ -153,15 +163,44 @@ export function pickEvent(state, world) {
 
   if (candidates.length === 0) return null;
 
-  /* §13.3 规则3「三连停摆补偿」：连续 3 轮都只推进「小」，
-     第 4 轮优先挑一个**有大分支**的事件，把剧情推起来。
-     只收窄候选池，**不放出**本来不该出的事件 —— 补偿不能越过 when/require。 */
+  /* ── §13.3 保底推进（规则3 / 4 / 5） ──────────────────────────────
+     优先级：规则3（三连「小」）> 规则4（主线 5 轮停滞）> 规则5（调查线 5 轮停滞）。
+     实现方式一律是**收窄候选池**：
+
+       铁律：只收窄，绝不**放宽** when / require —— 补偿不能把本来不该出现的事件
+       放出来，那是拿"不卡关"换"剧情错乱"。池子收窄到空就退回原池。
+
+     规则的判据来自 history 上的 `line` / `magnitude`（recordHistory 已写入，
+     由 deriveLine / deriveMagnitude 从 effects 推导）。 */
+  const hist = state.history ?? [];
+  const hasLine = (ev, want) =>
+    (ev.branches ?? []).some(b => deriveLine(b.effects ?? []) === want);
+
   let pool = candidates;
-  const tail = (state.history ?? []).slice(-3);
-  if (tail.length === 3 && tail.every(h => h.magnitude === '小')) {
-    const big = candidates.filter(ev =>
-      (ev.branches ?? []).some(b => deriveMagnitude(b.effects ?? []) === '大'));
+
+  // 规则3 · 三连停摆补偿：连续 3 轮都只推进「小」，第 4 轮挑一个有大分支的事件
+  const last3 = hist.slice(-3);
+  if (last3.length === 3 && last3.every(h => h.magnitude === '小')) {
+    const big = candidates.filter(ev => (ev.branches ?? []).some(
+      b => deriveMagnitude(b.effects ?? []) === '大'));
     if (big.length > 0) pool = big;
+  } else {
+    // 规则4 / 5 · 主线与次主线不可长期停滞（各 5 轮）
+    const last5 = hist.slice(-5);
+    if (last5.length === 5) {
+      const noRelation = last5.every(h => h.line !== '关系线');
+      const noInvest = last5.every(h => h.line !== '调查线');
+
+      if (noRelation) {                       // 规则4 优先于规则5
+        const rel = candidates.filter(ev => hasLine(ev, '关系线'));
+        if (rel.length > 0) pool = rel;
+      }
+      // 规则4 没找到可推的事件时才轮到规则5（主线优先，但不能因此卡死）
+      if (pool === candidates && noInvest) {
+        const inv = candidates.filter(ev => hasLine(ev, '调查线'));
+        if (inv.length > 0) pool = inv;
+      }
+    }
   }
 
   return pool.slice().sort((a, b) => {

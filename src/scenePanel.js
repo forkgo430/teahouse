@@ -18,6 +18,7 @@
  */
 
 import { DISPLAY_FIELDS } from './schema.js';
+import { intimacyBoard, intimacyLine } from './intimacy.js';
 
 const FIELD_LABELS = Object.freeze({
   emotion: '情绪',
@@ -112,6 +113,10 @@ export function scenePanelMarkup(state, world = {}, opts = {}) {
       if (!isBlank(a[f])) rows.push(`${FIELD_LABELS[f]} = ${a[f]}`);
     }
     if (stats) rows.push(`数值 = ${stats}`);
+
+    // §23 亲密状态：与 §4 的「当轮意愿与边界」并列，但记的是**已发生过什么**
+    const im = intimacyBoard(state, world, [id])[0];
+    if (im && (im.count > 0 || im.paused)) rows.push(`亲密记录 = ${intimacyLine(im)}`);
 
     out.push(`[${title}]`, ...rows, `[/${title}]`);
   }

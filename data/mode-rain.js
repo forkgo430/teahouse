@@ -6296,6 +6296,17 @@ export const RAINNIGHT_MODE = {
       ],
     },
 
+    /* §6 关系与身份矩阵：固定角色与玩家之间**既有**的关系，以及不得违反的规则。
+       它管的是「本来就存在的关系」，和 §7 的路线（会变的进度）不是一回事。 */
+    relations: [
+      '{{user}} ↔ 林晚晴：小叔子 / 嫂子，礼貌距离，家庭求助',
+      '{{user}} ↔ 周若宁：叔叔 / 侄女，童年照顾，家庭依赖',
+      '{{user}} ↔ 周世杰：兄弟，常年疏远',
+      '林晚晴 ↔ 周世杰：夫妻，债务牵连',
+      '周若宁 ↔ 周世杰：父女，愤怒与羞耻，预想断绝',
+      '林晚晴 ↔ 周若宁：母女，共同求助',
+    ],
+
     /* §18 资源调用系统 / §10.1 资源与事件的绑定。
        用途与代价按文档原文；冷却/金额是文档没给数的部分，由我定的量（可调）。
        「神秘势力」文档写「未明 · 保留为终局变量」，没有可判定的代价，
@@ -6373,6 +6384,7 @@ export function createRainWorld(createWorldFn) {
        所以 `world.actors` 是空的 —— 人设段就会静默地永远不注入。 */
     actorDefs: w.actors,
     resources: w.resources,
+    relations: w.relations,
     guards: RAINNIGHT_MODE.guards(),
     /* 模式级字段也要交给世界 —— 它们本来就在 RAINNIGHT_MODE 顶层躺着，
        但从没被传下去：UI 判 `world.rainLevel > 0` 决定起不起 BGM，

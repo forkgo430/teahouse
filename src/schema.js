@@ -587,6 +587,10 @@ export function createInitialState(def = {}) {
       bounds,
       // 年龄（卡标题要 `林晚晴｜36岁 · 当前状态`）。非数字一律 null。
       age: Number.isInteger(a.age) ? a.age : null,
+      /* §23 亲密状态卡的**可查字段**。文档要「记录与追踪」，
+         但记录必须能落进 state（内容层用 effects 写），否则面板永远显示 0 次。
+         给初值是为了 effects 能直接 add —— locate() 要求中间段已存在。 */
+      intimacy: { count: 0, last: '' },
       // 角色卡描写字段：一律给空串，卡片渲染时按空值处理，
       // 免得 UI 到处判 undefined。
       ...Object.fromEntries(DISPLAY_FIELDS.map(f => [f, typeof a[f] === 'string' ? a[f] : ''])),

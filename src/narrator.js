@@ -169,7 +169,7 @@ export function buildChoiceMessages({ brief, situation, event, options, playerIn
  * @param {string} [ctx.lore] 世界书扫出来的相关设定
  * @param {object} [ctx.style] 玩家的文风配置（见 src/style.js）；不传就是默认
  */
-export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null }) {
+export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null }) {
   const parts = [];
   if (brief) parts.push(`【背景】\n${brief}`);
   parts.push(`【当前局面】\n${situation}`);
@@ -182,6 +182,11 @@ export function buildNarrationMessages({ brief, situation, event, branch, report
       for (const it of items ?? []) lines.push(`· [${group}] ${it}`);
     }
     if (lines.length) parts.push(`【禁止（违反即作废这一段）】\n${lines.join('\n')}`);
+  }
+
+  /* §6 关系与身份矩阵：既有关系是**固定**的，不许改、不许跳变（§9.4 关系类）。 */
+  if (Array.isArray(relations) && relations.length) {
+    parts.push(`【既有关系（§6，不得修改、不得跳变）】\n${relations.map(r => `· ${r}`).join('\n')}`);
   }
 
   /* §24.1 角色档案：性格核心 / 标志动作 / 对玩家态度 / 压力与自尊反应。

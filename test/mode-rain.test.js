@@ -25,6 +25,7 @@ import {
 } from '../src/boundary.js';
 import { buildNarrationMessages } from '../src/narrator.js';
 import { callResource, resourceBoard } from '../src/resources.js';
+import { recordIntimacyEffects, intimacyBoard, pauseReason, intimacyLine } from '../src/intimacy.js';
 
 /* 与 ui/app.js 完全一致的两行装配 —— 这正是当初断掉的地方 */
 const world = () => createRainWorld(createWorld);
@@ -352,6 +353,50 @@ test('§18：资源调用不产生任何同意/路线效果', () => {
         `资源 ${b.id} 动了 ${e.path} —— 文档写明「资源不自动等于亲密同意」`);
     }
   }
+});
+
+
+/* ── §6 关系与身份矩阵 / §23 亲密状态卡 ── */
+
+test('§6 关系矩阵进了提示词，且是「既有关系」不是路线进度', () => {
+  const w = world();
+  assert.ok(Array.isArray(w.relations) && w.relations.length >= 6,
+    `关系矩阵条数 ${(w.relations ?? []).length}`);
+  const user = buildNarrationMessages({
+    brief: w.brief, situation: '局面', event: { title: 'T' },
+    branch: { label: 'L' }, report: { changes: [] }, world: w, relations: w.relations,
+  })[1].content;
+  assert.ok(user.includes('【既有关系'), '关系矩阵没进提示词');
+  assert.ok(user.includes('小叔子 / 嫂子'), '关系矩阵内容缺失');
+});
+
+test('§23：亲密记录可写、可查，且暂停理由来自既有状态', () => {
+  const w = world();
+  let s = initialState();
+
+  // 初始：0 次，且路线未开启 → 暂停中
+  assert.equal(s.actors.seeker.intimacy.count, 0, '初值不是 0 次');
+  assert.equal(pauseReason(s, 'seeker'), '路线未开启');
+
+  // 记一次
+  s = applyEffects(s, recordIntimacyEffects('seeker', { day: 12, place: '主卧', mode: '体外' })).state;
+  assert.equal(s.actors.seeker.intimacy.count, 1, '累计次数没有 +1');
+  assert.match(s.actors.seeker.intimacy.last, /主卧/, '最近一次没记上');
+
+  const line = intimacyLine(intimacyBoard(s, w, ['seeker'])[0]);
+  assert.match(line, /累计 1 次/, `面板行不对：${line}`);
+  assert.match(line, /性欲望/, '面板行缺性欲望');
+
+  // 暂停理由的三条来源：医嘱禁欲 > 明确拒绝 > 路线未开启
+  const abstained = applyEffects(s, [{ path: 'flags.abstained', op: 'set', value: true }]).state;
+  assert.equal(pauseReason(abstained, 'seeker'), '医嘱禁欲期');
+
+  const refused = applyEffects(
+    applyEffects(s, [{ path: 'routes.seeker', op: 'set', value: 'open' }]).state,
+    // consent.<id> 初始并不存在（还没登记过当轮意愿）—— 整对象 set，别去 add 不存在的叶子
+    [{ path: 'consent.seeker', op: 'set', value: { state: 'refused' } }],
+  ).state;
+  assert.equal(pauseReason(refused, 'seeker'), '角色已明确拒绝');
 });
 
 test('动态标题（带角色名/年龄）也能命中区块名，而不是退化纯文本', () => {

@@ -92,6 +92,7 @@ export function createWorld(def = {}) {
     prohibitions: def.prohibitions ?? null, // §9.4 禁止矩阵
     actorDefs: def.actorDefs ?? null,       // 角色定义（含 §24.1 人设）
     resources: def.resources ?? null,       // §18 可调用资源
+    relations: def.relations ?? null,       // §6 关系与身份矩阵
 
     index: buildIndex(events),
   };

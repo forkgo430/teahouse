@@ -94,6 +94,7 @@ export function createWorld(def = {}) {
     resources: def.resources ?? null,       // §18 可调用资源
     relations: def.relations ?? null,       // §6 关系与身份矩阵
     cards: def.cards ?? null,               // §5.1 燕双鹰卡组
+    playerCard: def.playerCard ?? null,     // §5 玩家变量卡
 
     index: buildIndex(events),
   };

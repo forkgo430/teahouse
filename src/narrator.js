@@ -169,7 +169,7 @@ export function buildChoiceMessages({ brief, situation, event, options, playerIn
  * @param {string} [ctx.lore] 世界书扫出来的相关设定
  * @param {object} [ctx.style] 玩家的文风配置（见 src/style.js）；不传就是默认
  */
-export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null }) {
+export function buildNarrationMessages({ brief, situation, event, branch, report, playerInput, world, lore = '', style, statusCard = '', prohibitions = null, personas = null, relations = null, playerCard = null }) {
   const parts = [];
   if (brief) parts.push(`【背景】\n${brief}`);
   parts.push(`【当前局面】\n${situation}`);
@@ -182,6 +182,11 @@ export function buildNarrationMessages({ brief, situation, event, branch, report
       for (const it of items ?? []) lines.push(`· [${group}] ${it}`);
     }
     if (lines.length) parts.push(`【禁止（违反即作废这一段）】\n${lines.join('\n')}`);
+  }
+
+  /* §5 玩家变量卡：玩家是谁、能调用什么。经济数据不在这里（以 §10 账本为准）。 */
+  if (Array.isArray(playerCard) && playerCard.length) {
+    parts.push(`【玩家（§5）】\n${playerCard.map(x => `· ${x}`).join('\n')}`);
   }
 
   /* §6 关系与身份矩阵：既有关系是**固定**的，不许改、不许跳变（§9.4 关系类）。 */

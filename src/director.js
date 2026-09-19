@@ -344,6 +344,7 @@ export function createDirector({ world, client = null, onDelta = null, options =
           // §9.4 禁止矩阵：模式声明的口径，原文照发
           prohibitions: world.prohibitions ?? null,
           relations: world.relations ?? null,
+          playerCard: world.playerCard ?? null,
           // §24.1 角色人设：只发有 persona 的角色（雨夜里就是林晚晴与周若宁）
           personas: (world.actorDefs ?? []).filter(a => a.persona).map(a => ({
             name: a.name,

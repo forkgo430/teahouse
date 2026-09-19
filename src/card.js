@@ -49,14 +49,31 @@
  * 解析
  * ------------------------------------------------------------------ */
 
-/** 已知区块的组件类型。不在这里的名字一律当普通文本，不做任何渲染。 */
-const BLOCKS = Object.freeze({
-  状态栏: 'stats',
-  属性: 'stats',
-  物品栏: 'list',
-  背包: 'list',
-  在场: 'list',
-});
+/**
+ * 区块名 → 组件类型。2026-09-19 从「精确匹配」改成「模式匹配」。
+ *
+ * 起因：雨夜模式要按设定文档的 P2 版式渲染，而那张卡的标题是**动态**的
+ * —— `林晚晴｜36岁 · 当前状态`、`债务线索与长期事件`。
+ * 精确匹配永远命中不了，整张卡会退化成纯文本（这正是"页面只剩纯文本"的根因）。
+ * 改用正则后，标题可以带角色名/年龄/限定词前缀，组件类型仍然可判定。
+ * 不匹配任何模式的名字一律当普通文本，不做渲染 —— 这条没变。
+ */
+const BLOCK_PATTERNS = Object.freeze([
+  [/^当前局面$/, 'scene'],
+  [/当前状态$/, 'stats'],
+  [/账本$/, 'stats'],
+  [/^状态栏$|^属性$/, 'stats'],
+  [/长期事件$|线索$/, 'list'],
+  [/^物品栏$|^背包$|^在场$/, 'list'],
+  [/^内心想法$/, 'thought'],
+]);
+
+/** 取区块名对应的组件类型；不认识的返回 null（当纯文本处理）。 */
+export function blockKind(title) {
+  const t = String(title ?? '').trim();
+  for (const [re, kind] of BLOCK_PATTERNS) if (re.test(t)) return kind;
+  return null;
+}
 
 /**
  * 参考块 —— 不进正文，只在设置里展示"卡片长什么样"。
@@ -83,8 +100,12 @@ export function sampleCardMarkup({ title = '状态栏', actor = '林晚', note =
 /** 行内标记：[前缀:...]，后面可以跟一个真值标记 ` ✓` */
 const INLINE_RE = /\[([^\]:\n]{1,12}):([^\]\n]*)\]( ?✓)?/g;
 
-/** 区块开头的形状：[名] 独占一行（前后可有空白） */
-const OPEN_RE = /^\[([^\]:\n]{1,12})\]\s*$/;
+/**
+ * 区块开头的形状：[名] 独占一行（前后可有空白）。
+ * 限长 24：P2 版式的卡标题带角色名与年龄（`林晚晴｜36岁 · 当前状态` = 14 字），
+ * 旧的 12 字上限会把它们挡在门外，整张卡退化成纯文本。
+ */
+const OPEN_RE = /^\[([^\]:\n]{1,24})\]\s*$/;
 
 /**
  * 把一段正文切成「纯文本段」与「组件段」。
@@ -127,9 +148,10 @@ export function parseCardMarkup(text) {
     }
 
     // 区块外：是开始标记吗？
-    if (open && !open[1].startsWith('/') && BLOCKS[open[1]]) {
+    const openedKind = open && !open[1].startsWith('/') ? blockKind(open[1]) : null;
+    if (openedKind) {
       flushText();
-      block = { kind: BLOCKS[open[1]], title: open[1], items: [] };
+      block = { kind: openedKind, title: open[1], items: [] };
       continue;
     }
 
@@ -182,7 +204,7 @@ export function hasCardMarkup(text) {
   INLINE_RE.lastIndex = 0;
   return s.split('\n').some(line => {
     const m = OPEN_RE.exec(line.trim());
-    return m && !m[1].startsWith('/') && BLOCKS[m[1]];
+    return m && !m[1].startsWith('/') && blockKind(m[1]) != null;
   });
 }
 
@@ -209,7 +231,9 @@ export function renderBlock(seg, el) {
     return card;
   }
 
-  if (seg.kind === 'stats') {
+  // scene（当前局面）与 stats 同构：都是键 = 值，值多为文本 —— 复用同一分支，
+  // 数字才画进度条，文本走 ne-card-val。
+  if (seg.kind === 'stats' || seg.kind === 'scene') {
     for (const it of seg.items) {
       const row = el('div', 'ne-card-row');
 
@@ -250,6 +274,16 @@ export function renderBlock(seg, el) {
 
       card.appendChild(row);
     }
+    return card;
+  }
+
+  // thought：〔内心想法〕，整段引用式渲染
+  if (seg.kind === 'thought') {
+    const q = el('div', 'ne-card-thought');
+    for (const it of seg.items) {
+      q.appendChild(el('div', 'ne-card-thought-line', it.key ? `${it.key}：${it.value}` : it.value));
+    }
+    card.appendChild(q);
     return card;
   }
 

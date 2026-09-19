@@ -1278,7 +1278,10 @@ function startMain(root, opts = {}) {
       const head = el('div', 'ne-msg-head');
       head.appendChild(el('span', 'ne-msg-kind', '开场'));
       intro.appendChild(head);
-      intro.appendChild(el('p', 'ne-msg-text', world.opening));
+      /* 开场也走标记管线：雨夜模式的开场是 P2 版式（〔当前局面〕+ 角色卡 + 账本 + 线索），
+         需要按组件渲染。茶馆开场是纯文本、不含标记 → textBox 内部走
+         `!hasCardMarkup` 分支，产出的仍是单个 <p class="ne-msg-text">，行为与改前一致。 */
+      intro.appendChild(textBox(world.opening));
       stream.appendChild(intro);
       return;
     }
@@ -2772,6 +2775,12 @@ function startMain(root, opts = {}) {
       btn.type = 'button';
       btn.dataset.sfx = 'pick';    // 推进选项 = 抽一支签，全站最典型的 pick
       btn.appendChild(el('span', 'ne-choice-key', opt.key));
+      /* §13.2：选项文本按「【线名 · 推进幅度】…」呈现。
+         line / magnitude 由引擎从分支 effects **推导**（src/engine.js），
+         推不出就不加前缀 —— 不硬编一个假分类糊在玩家脸上。 */
+      if (opt.line) {
+        btn.appendChild(el('span', 'ne-choice-line', `【${opt.line} · ${opt.magnitude}】`));
+      }
       btn.appendChild(el('span', null, opt.label));
       if (!opt.available) {
         btn.disabled = true;

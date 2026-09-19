@@ -224,6 +224,33 @@ export const SHIPPED_RULES = [
     destination: { display: true, prompt: false },
     enabled: true,
   },
+  /* ── LaTeX 清洗（2026-09-19，雨夜侧） ──
+     设定文档 §11.3 的原版是 LaTeX。我们**不**在运行时解析 LaTeX（花括号嵌套，
+     正则必在半路断掉）；引擎的正式契约是 src/card.js 那套声明式标记。
+     这两条只做兜底：模型偶尔照文档吐 LaTeX 时，别让 `\[ \fcolorbox{..}` 原样
+     糊在页面上。真正的版式由标记产出，不由 LaTeX 产出。 */
+  {
+    id: 'rx-shipped-latex-delim',
+    name: 'LaTeX 定界符（显示层）',
+    // 去掉 \[ \] \( \) 这类数学定界符本身
+    find: '\\\\[\\[\\]\\(\\)]',
+    replace: '',
+    flags: 'g',
+    source: { input: false, output: true },
+    destination: { display: true, prompt: false },
+    enabled: true,
+  },
+  {
+    id: 'rx-shipped-latex-macro',
+    name: 'LaTeX 宏（显示层）',
+    // \textbf{…} / \textit{…} / \emph{…} / \textcolor{色}{…} → 只留内容
+    find: '\\\\(?:textbf|textit|emph)\\{([^{}]*)\\}|\\\\textcolor\\{[^{}]*\\}\\{([^{}]*)\\}',
+    replace: '$1$2',
+    flags: 'g',
+    source: { input: false, output: true },
+    destination: { display: true, prompt: false },
+    enabled: true,
+  },
   {
     id: 'rx-shipped-trim',
     name: '收尾空白',

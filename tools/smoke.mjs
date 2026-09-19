@@ -289,6 +289,34 @@ async function run() {
           R.missing.push('.ne-tag 没有底色（行内标签样式没生效）');
         }
       } else R.missing.push('缺少 .ne-tag');
+
+      /* 2026-09-19 新增的三类：局面卡 / 内心想法 / 选项前缀。
+         没有样式 = 等于没做；而且是"看起来有元素、其实是裸文本"的那种静默降级。 */
+      host.insertAdjacentHTML('beforeend',
+        '<div class="ne-card ne-card-scene">'
+        + '<div class="ne-card-head"><span class="ne-card-title">当前局面</span></div>'
+        + '<div class="ne-card-note">2025-09-26 深夜 · 你的住处 · 雨夜投奔</div></div>'
+        + '<div class="ne-card-thought"><div class="ne-card-thought-line">一句话</div></div>'
+        + '<span class="ne-choice-line">【关系线 · 中】</span>');
+
+      const scene = host.querySelector('.ne-card-scene');
+      if (!scene) R.missing.push('缺少 .ne-card-scene');
+      else {
+        const ss = getComputedStyle(scene);
+        if (!ss.borderColor || ss.borderColor === 'rgba(0, 0, 0, 0)') {
+          R.missing.push('.ne-card-scene 没有边框色（局面卡样式没生效）');
+        }
+      }
+      const thought = host.querySelector('.ne-card-thought');
+      if (!thought) R.missing.push('缺少 .ne-card-thought');
+      else if (!/solid/.test(getComputedStyle(thought).borderLeftStyle)) {
+        R.missing.push('.ne-card-thought 左侧没有竖线（引用样式没生效）');
+      }
+      const cline = host.querySelector('.ne-choice-line');
+      if (!cline) R.missing.push('缺少 .ne-choice-line');
+      else if (!getComputedStyle(cline).color) {
+        R.missing.push('.ne-choice-line 没有颜色（选项前缀没生效）');
+      }
       // 图标体系：删除按钮的 × 必须是 mask 出来的，不是掉字
       const probe = document.querySelector('.rx-del .ic');
       if (probe) {

@@ -1170,6 +1170,15 @@
     font-size: 10.5px;
   }
 
+  /* §13.2 的「【线名 · 推进幅度】」前缀：金色小字，只做分类标记，不抢选项本身 */
+  .ne-choice-line {
+    flex: none;
+    margin-right: 3px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: var(--gold);
+  }
+
   .ne-choice-why { font-size: 11px; color: var(--ink-3); }
 
   /* 输入行 */
@@ -3451,6 +3460,31 @@
 
 .ne-card-text { min-width: 0; }
 
+/* ── 〔当前局面〕：版式的头 ──
+   它不该和属性卡长得一样 —— 玩家第一眼要看见"现在什么时候、在哪儿"。 */
+.ne-card-scene {
+  border-color: var(--gold-dim);
+  background: var(--paper);
+}
+.ne-card-scene .ne-card-title { color: var(--gold); }
+.ne-card-scene .ne-card-note { font-size: 13.5px; color: var(--ink); }
+.ne-card-scene .ne-card-val { color: var(--ink); }
+.ne-card-scene .ne-card-key { color: var(--ink-3); }
+
+/* ── 〔内心想法〕：引用式，和正文拉开层次 ── */
+.ne-card-thought {
+  margin-top: 2px;
+  padding: 7px 11px;
+  background: var(--paper);
+  border-left: 2px solid var(--gold-dim);
+  border-radius: 0 6px 6px 0;
+}
+.ne-card-thought-line {
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: var(--ink-2);
+}
+
 /* ── 行内标记 ── */
 
 .ne-tag {
@@ -3494,6 +3528,28 @@ body.mode-rainnight .ne-card {
   border-color: rgba(143, 180, 255, 0.16);
   box-shadow: none;
 }
+
+/* 局面卡在深底上要走金线，别被上面的统一覆盖吃掉层次 */
+body.mode-rainnight .ne-card-scene {
+  background: rgba(217, 180, 111, 0.08);
+  border-color: rgba(217, 180, 111, 0.32);
+}
+body.mode-rainnight .ne-card-scene .ne-card-title { color: var(--gold); }
+body.mode-rainnight .ne-card-scene .ne-card-note,
+body.mode-rainnight .ne-card-scene .ne-card-val { color: var(--ink); }
+
+body.mode-rainnight .ne-card-thought {
+  background: rgba(143, 180, 255, 0.06);
+  border-left-color: rgba(143, 180, 255, 0.32);
+}
+
+/* ── 沉浸感 (a)：正文呼吸感 ──
+   面板之外，正文本身也要有留白与节奏，不然整屏读起来像运行日志。 */
+body.mode-rainnight .ne-msg-text {
+  line-height: 1.95;
+  letter-spacing: 0.012em;
+}
+body.mode-rainnight .ne-msg + .ne-msg { margin-top: 14px; }
 
 body.mode-rainnight .ne-tag {
   background: var(--panel-3);
